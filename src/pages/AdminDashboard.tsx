@@ -1,6 +1,7 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, type ReactNode } from "react";
 import { useNavigate, useLocation } from "react-router";
 import { useAuth } from "@/hooks/useAuth";
+import { useErrorBoundary } from "@/hooks/useErrorBoundary";
 import { packageService, type Package } from "@/lib/supabase";
 import {
   LayoutDashboard,
@@ -22,6 +23,7 @@ import {
   Loader2,
   AlertCircle,
   CheckCircle2,
+  RefreshCw,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -61,12 +63,14 @@ const sidebarItems = [
   { icon: Settings, label: "Settings", path: "/admin/settings" },
 ];
 
+// ================= MAIN COMPONENT =================
 export default function AdminDashboard() {
   const { user, isAuthenticated, logout, isLoading } = useAuth();
+  const { hasError, error, reset } = useErrorBoundary();
   const navigate = useNavigate();
   const location = useLocation();
 
-  // Show loading spinner while auth initializes
+  // Show spinner while auth initializes
   if (isLoading) {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center">
@@ -78,7 +82,7 @@ export default function AdminDashboard() {
     );
   }
 
-  // Not logged in — show access required (not a white screen!)
+  // Not logged in
   if (!isAuthenticated) {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center px-4">
@@ -87,20 +91,11 @@ export default function AdminDashboard() {
             <AlertCircle className="h-8 w-8 text-red-500" />
           </div>
           <h2 className="text-2xl font-bold text-slate-900 mb-2">Admin Access Required</h2>
-          <p className="text-slate-500 mb-6">
-            You must be signed in as an administrator to access this area.
-          </p>
-          <Button
-            onClick={() => navigate("/login")}
-            className="bg-blue-700 hover:bg-blue-800"
-          >
+          <p className="text-slate-500 mb-6">You must be signed in as an administrator.</p>
+          <Button onClick={() => navigate("/login")} className="bg-blue-700 hover:bg-blue-800">
             Sign In
           </Button>
-          <Button
-            variant="ghost"
-            onClick={() => navigate("/")}
-            className="ml-2"
-          >
+          <Button variant="ghost" onClick={() => navigate("/")} className="ml-2">
             Go Home
           </Button>
         </Card>
@@ -108,15 +103,47 @@ export default function AdminDashboard() {
     );
   }
 
-  // Determine active page from URL path
+  // Caught a runtime error
+  if (hasError) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center px-4">
+        <Card className="w-full max-w-lg text-center p-8 shadow-xl">
+          <div className="w-16 h-16 bg-red-50 rounded-full flex items-center justify-center mx-auto mb-4">
+            <AlertCircle className="h-8 w-8 text-red-500" />
+          </div>
+          <h2 className="text-2xl font-bold text-slate-900 mb-2">Something Went Wrong</h2>
+          <p className="text-slate-500 mb-4 text-sm">{error?.message || "An unexpected error occurred."}</p>
+          <div className="flex justify-center gap-2">
+            <Button onClick={reset} variant="outline">
+              <RefreshCw className="h-4 w-4 mr-1" />
+              Try Again
+            </Button>
+            <Button onClick={() => { logout(); navigate("/login"); }} className="bg-blue-700">
+              Back to Login
+            </Button>
+          </div>
+        </Card>
+      </div>
+    );
+  }
+
+  // Safe content render
   const path = location.pathname;
-  const renderContent = () => {
-    if (path === "/admin/create") return <CreateShipmentPage />;
-    if (path === "/admin/shipments") return <ShipmentsPage />;
-    if (path === "/admin/leaderboard") return <LeaderboardPage />;
-    if (path === "/admin/settings") return <SettingsPage />;
-    return <DashboardOverview />;
-  };
+  let content: ReactNode;
+  try {
+    if (path === "/admin/create") content = <CreateShipmentPage />;
+    else if (path === "/admin/shipments") content = <ShipmentsPage />;
+    else if (path === "/admin/leaderboard") content = <LeaderboardPage />;
+    else if (path === "/admin/settings") content = <SettingsPage />;
+    else content = <DashboardOverview />;
+  } catch (err) {
+    content = (
+      <div className="p-8 text-center">
+        <AlertCircle className="h-10 w-10 text-red-500 mx-auto mb-3" />
+        <p className="text-slate-600">Failed to load page content.</p>
+      </div>
+    );
+  }
 
   const activeLabel = sidebarItems.find((i) => i.path === path)?.label || "Dashboard";
 
@@ -144,9 +171,7 @@ export default function AdminDashboard() {
                 key={item.path}
                 onClick={() => navigate(item.path)}
                 className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
-                  isActive
-                    ? "bg-blue-700 text-white"
-                    : "text-slate-400 hover:text-white hover:bg-slate-800"
+                  isActive ? "bg-blue-700 text-white" : "text-slate-400 hover:text-white hover:bg-slate-800"
                 }`}
               >
                 <item.icon className="h-4 w-4" />
@@ -214,14 +239,14 @@ export default function AdminDashboard() {
 
         {/* Page Content */}
         <main className="flex-1 p-4 md:p-6 overflow-auto">
-          {renderContent()}
+          {content}
         </main>
       </div>
     </div>
   );
 }
 
-// Mobile Navigation Overlay
+// ================= MOBILE NAV =================
 function MobileNav() {
   const [open, setOpen] = useState(false);
   const navigate = useNavigate();
@@ -258,9 +283,7 @@ function MobileNav() {
                     key={item.path}
                     onClick={() => { navigate(item.path); setOpen(false); }}
                     className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
-                      isActive
-                        ? "bg-blue-700 text-white"
-                        : "text-slate-400 hover:text-white hover:bg-slate-800"
+                      isActive ? "bg-blue-700 text-white" : "text-slate-400 hover:text-white hover:bg-slate-800"
                     }`}
                   >
                     <item.icon className="h-4 w-4" />
@@ -291,24 +314,31 @@ function MobileNav() {
 function DashboardOverview() {
   const [stats, setStats] = useState({ total: 0, delivered: 0, inTransit: 0, held: 0 });
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    let cancelled = false;
     async function load() {
       try {
         const packages = await packageService.list();
+        if (cancelled) return;
         setStats({
           total: packages.length,
           delivered: packages.filter((p) => p.status === "delivered").length,
           inTransit: packages.filter((p) => p.status === "sent" || p.status === "received").length,
           held: packages.filter((p) => p.status === "held_by_customs").length,
         });
-      } catch (err) {
+        setError(null);
+      } catch (err: any) {
+        if (cancelled) return;
         console.error("Dashboard stats error:", err);
+        setError(err?.message || "Failed to load stats");
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     }
     load();
+    return () => { cancelled = true; };
   }, []);
 
   if (loading) {
@@ -317,11 +347,7 @@ function DashboardOverview() {
         <h2 className="text-2xl font-bold text-slate-900">Dashboard</h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {[1, 2, 3, 4].map((i) => (
-            <Card key={i}>
-              <CardContent className="p-4">
-                <div className="h-16 bg-slate-100 rounded animate-pulse" />
-              </CardContent>
-            </Card>
+            <Card key={i}><CardContent className="p-4"><div className="h-16 bg-slate-100 rounded animate-pulse" /></CardContent></Card>
           ))}
         </div>
       </div>
@@ -335,56 +361,43 @@ function DashboardOverview() {
         <p className="text-slate-500">Overview of your shipping operations</p>
       </div>
 
+      {error && (
+        <div className="p-4 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700 flex items-center gap-2">
+          <AlertCircle className="h-4 w-4" />
+          {error}
+        </div>
+      )}
+
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <Card>
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg bg-blue-50 flex items-center justify-center">
-                <Ship className="h-5 w-5 text-blue-700" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-slate-900">{stats.total}</p>
-                <p className="text-xs text-slate-500">Total Shipments</p>
-              </div>
+              <div className="w-10 h-10 rounded-lg bg-blue-50 flex items-center justify-center"><Ship className="h-5 w-5 text-blue-700" /></div>
+              <div><p className="text-2xl font-bold text-slate-900">{stats.total}</p><p className="text-xs text-slate-500">Total Shipments</p></div>
             </div>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg bg-emerald-50 flex items-center justify-center">
-                <CheckCircle2 className="h-5 w-5 text-emerald-600" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-slate-900">{stats.delivered}</p>
-                <p className="text-xs text-slate-500">Delivered</p>
-              </div>
+              <div className="w-10 h-10 rounded-lg bg-emerald-50 flex items-center justify-center"><CheckCircle2 className="h-5 w-5 text-emerald-600" /></div>
+              <div><p className="text-2xl font-bold text-slate-900">{stats.delivered}</p><p className="text-xs text-slate-500">Delivered</p></div>
             </div>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg bg-amber-50 flex items-center justify-center">
-                <Truck className="h-5 w-5 text-amber-600" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-slate-900">{stats.inTransit}</p>
-                <p className="text-xs text-slate-500">In Transit</p>
-              </div>
+              <div className="w-10 h-10 rounded-lg bg-amber-50 flex items-center justify-center"><Truck className="h-5 w-5 text-amber-600" /></div>
+              <div><p className="text-2xl font-bold text-slate-900">{stats.inTransit}</p><p className="text-xs text-slate-500">In Transit</p></div>
             </div>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg bg-orange-50 flex items-center justify-center">
-                <AlertCircle className="h-5 w-5 text-orange-600" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-slate-900">{stats.held}</p>
-                <p className="text-xs text-slate-500">Held by Customs</p>
-              </div>
+              <div className="w-10 h-10 rounded-lg bg-orange-50 flex items-center justify-center"><AlertCircle className="h-5 w-5 text-orange-600" /></div>
+              <div><p className="text-2xl font-bold text-slate-900">{stats.held}</p><p className="text-xs text-slate-500">Held by Customs</p></div>
             </div>
           </CardContent>
         </Card>
@@ -402,15 +415,16 @@ function ShipmentsPage({ limit }: { limit?: number }) {
   const [page, setPage] = useState(0);
   const [packages, setPackages] = useState<Package[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
 
-  // Dialog states
   const [createOpen, setCreateOpen] = useState(false);
   const [editPkg, setEditPkg] = useState<Package | null>(null);
   const [statusPkg, setStatusPkg] = useState<Package | null>(null);
   const [deletePkg, setDeletePkg] = useState<Package | null>(null);
 
   useEffect(() => {
+    let cancelled = false;
     async function load() {
       setLoading(true);
       try {
@@ -418,39 +432,44 @@ function ShipmentsPage({ limit }: { limit?: number }) {
           search: search || undefined,
           status: statusFilter || undefined,
         });
-        setPackages(data);
-      } catch (err) {
-        console.error("Shipments load error:", err);
+        if (!cancelled) {
+          setPackages(Array.isArray(data) ? data : []);
+          setError(null);
+        }
+      } catch (err: any) {
+        if (!cancelled) {
+          console.error("Shipments load error:", err);
+          setError(err?.message || "Failed to load shipments");
+          setPackages([]);
+        }
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     }
     load();
+    return () => { cancelled = true; };
   }, [search, statusFilter, refreshKey]);
 
   const paginated = limit ? packages.slice(0, limit) : packages.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
-  const totalPages = Math.ceil(packages.length / PAGE_SIZE);
+  const totalPages = Math.max(1, Math.ceil(packages.length / PAGE_SIZE));
 
   const handleCreate = async (data: any) => {
     await packageService.create(data);
     setCreateOpen(false);
     setRefreshKey((k) => k + 1);
   };
-
   const handleUpdate = async (data: any) => {
     if (!editPkg) return;
     await packageService.update(editPkg.id, data);
     setEditPkg(null);
     setRefreshKey((k) => k + 1);
   };
-
   const handleStatusUpdate = async (data: any) => {
     if (!statusPkg) return;
     await packageService.updateStatus(statusPkg.id, data.status, data.reason);
     setStatusPkg(null);
     setRefreshKey((k) => k + 1);
   };
-
   const handleDelete = async () => {
     if (!deletePkg) return;
     await packageService.delete(deletePkg.id);
@@ -467,19 +486,13 @@ function ShipmentsPage({ limit }: { limit?: number }) {
         </div>
       )}
 
-      {/* Filters */}
       <Card>
         <CardContent className="pt-6">
           <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between">
             <div className="flex flex-col sm:flex-row gap-3 flex-1 w-full sm:w-auto">
               <div className="relative flex-1 max-w-sm">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                <Input
-                  placeholder="Search tracking code..."
-                  value={search}
-                  onChange={(e) => { setSearch(e.target.value); setPage(0); }}
-                  className="pl-9"
-                />
+                <Input placeholder="Search tracking code..." value={search} onChange={(e) => { setSearch(e.target.value); setPage(0); }} className="pl-9" />
               </div>
               <Select value={statusFilter} onValueChange={(v) => { setStatusFilter(v); setPage(0); }}>
                 <SelectTrigger className="w-full sm:w-44">
@@ -498,15 +511,10 @@ function ShipmentsPage({ limit }: { limit?: number }) {
             </div>
             <Dialog open={createOpen} onOpenChange={setCreateOpen}>
               <DialogTrigger asChild>
-                <Button className="bg-blue-700 hover:bg-blue-800">
-                  <Plus className="h-4 w-4 mr-1" />
-                  New Package
-                </Button>
+                <Button className="bg-blue-700 hover:bg-blue-800"><Plus className="h-4 w-4 mr-1" /> New Package</Button>
               </DialogTrigger>
               <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
-                <DialogHeader>
-                  <DialogTitle>Create New Package</DialogTitle>
-                </DialogHeader>
+                <DialogHeader><DialogTitle>Create New Package</DialogTitle></DialogHeader>
                 <PackageForm onSubmit={handleCreate} />
               </DialogContent>
             </Dialog>
@@ -514,13 +522,18 @@ function ShipmentsPage({ limit }: { limit?: number }) {
         </CardContent>
       </Card>
 
-      {/* Table */}
       <Card>
         <CardContent className="p-0">
           {loading ? (
             <div className="p-8 text-center">
               <Loader2 className="h-8 w-8 text-blue-700 animate-spin mx-auto mb-2" />
               <p className="text-slate-500">Loading shipments...</p>
+            </div>
+          ) : error ? (
+            <div className="p-8 text-center text-red-600">
+              <AlertCircle className="h-8 w-8 mx-auto mb-2" />
+              <p>{error}</p>
+              <Button variant="outline" className="mt-3" onClick={() => setRefreshKey((k) => k + 1)}>Retry</Button>
             </div>
           ) : (
             <>
@@ -540,9 +553,7 @@ function ShipmentsPage({ limit }: { limit?: number }) {
                   <TableBody>
                     {paginated.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={7} className="text-center py-8 text-slate-500">
-                          No packages found.
-                        </TableCell>
+                        <TableCell colSpan={7} className="text-center py-8 text-slate-500">No packages found.</TableCell>
                       </TableRow>
                     ) : (
                       paginated.map((pkg) => {
@@ -558,25 +569,15 @@ function ShipmentsPage({ limit }: { limit?: number }) {
                             </TableCell>
                             <TableCell className="text-sm">{pkg.recipientName}</TableCell>
                             <TableCell>
-                              <Badge className={`${STATUS_COLORS[pkg.status]} text-white text-xs`}>
-                                {STATUS_LABELS[pkg.status]}
-                              </Badge>
+                              <Badge className={`${STATUS_COLORS[pkg.status]} text-white text-xs`}>{STATUS_LABELS[pkg.status]}</Badge>
                             </TableCell>
                             <TableCell className="text-sm">{pkg.weight} kg</TableCell>
-                            <TableCell className="text-sm text-slate-500">
-                              {new Date(pkg.createdAt).toLocaleDateString()}
-                            </TableCell>
+                            <TableCell className="text-sm text-slate-500">{new Date(pkg.createdAt).toLocaleDateString()}</TableCell>
                             <TableCell className="text-right">
                               <div className="flex items-center justify-end gap-1">
-                                <Button variant="ghost" size="sm" onClick={() => setEditPkg(pkg)}>
-                                  <Edit className="h-4 w-4" />
-                                </Button>
-                                <Button variant="ghost" size="sm" onClick={() => setStatusPkg(pkg)}>
-                                  <Package className="h-4 w-4" />
-                                </Button>
-                                <Button variant="ghost" size="sm" className="text-red-500 hover:text-red-700" onClick={() => setDeletePkg(pkg)}>
-                                  <Trash2 className="h-4 w-4" />
-                                </Button>
+                                <Button variant="ghost" size="sm" onClick={() => setEditPkg(pkg)}><Edit className="h-4 w-4" /></Button>
+                                <Button variant="ghost" size="sm" onClick={() => setStatusPkg(pkg)}><Package className="h-4 w-4" /></Button>
+                                <Button variant="ghost" size="sm" className="text-red-500 hover:text-red-700" onClick={() => setDeletePkg(pkg)}><Trash2 className="h-4 w-4" /></Button>
                               </div>
                             </TableCell>
                           </TableRow>
@@ -587,18 +588,12 @@ function ShipmentsPage({ limit }: { limit?: number }) {
                 </Table>
               </div>
 
-              {!limit && totalPages > 1 && (
+              {!limit && (
                 <div className="flex items-center justify-between px-4 py-3 border-t border-slate-200">
-                  <p className="text-sm text-slate-500">
-                    Page {page + 1} of {totalPages} ({packages.length} total)
-                  </p>
+                  <p className="text-sm text-slate-500">Page {page + 1} of {totalPages} ({packages.length} total)</p>
                   <div className="flex items-center gap-1">
-                    <Button variant="outline" size="sm" onClick={() => setPage(page - 1)} disabled={page === 0}>
-                      <ChevronLeft className="h-4 w-4" />
-                    </Button>
-                    <Button variant="outline" size="sm" onClick={() => setPage(page + 1)} disabled={page >= totalPages - 1}>
-                      <ChevronRight className="h-4 w-4" />
-                    </Button>
+                    <Button variant="outline" size="sm" onClick={() => setPage(page - 1)} disabled={page === 0}><ChevronLeft className="h-4 w-4" /></Button>
+                    <Button variant="outline" size="sm" onClick={() => setPage(page + 1)} disabled={page >= totalPages - 1}><ChevronRight className="h-4 w-4" /></Button>
                   </div>
                 </div>
               )}
@@ -619,13 +614,7 @@ function ShipmentsPage({ limit }: { limit?: number }) {
       <Dialog open={!!statusPkg} onOpenChange={() => setStatusPkg(null)}>
         <DialogContent className="max-w-md">
           <DialogHeader><DialogTitle>Update Status</DialogTitle></DialogHeader>
-          {statusPkg && (
-            <StatusForm
-              currentStatus={statusPkg.status}
-              onSubmit={handleStatusUpdate}
-              onCancel={() => setStatusPkg(null)}
-            />
-          )}
+          {statusPkg && <StatusForm currentStatus={statusPkg.status} onSubmit={handleStatusUpdate} onCancel={() => setStatusPkg(null)} />}
         </DialogContent>
       </Dialog>
 
@@ -633,14 +622,9 @@ function ShipmentsPage({ limit }: { limit?: number }) {
       <Dialog open={!!deletePkg} onOpenChange={() => setDeletePkg(null)}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-red-600">
-              <Trash2 className="h-5 w-5" />
-              Delete Package
-            </DialogTitle>
+            <DialogTitle className="flex items-center gap-2 text-red-600"><Trash2 className="h-5 w-5" /> Delete Package</DialogTitle>
           </DialogHeader>
-          <p className="text-sm text-slate-600">
-            Delete <strong>{deletePkg?.trackingCode}</strong>? This cannot be undone.
-          </p>
+          <p className="text-sm text-slate-600">Delete <strong>{deletePkg?.trackingCode}</strong>? This cannot be undone.</p>
           <div className="flex justify-end gap-2 mt-4">
             <Button variant="outline" onClick={() => setDeletePkg(null)}>Cancel</Button>
             <Button variant="destructive" onClick={handleDelete}>Delete</Button>
@@ -654,23 +638,17 @@ function ShipmentsPage({ limit }: { limit?: number }) {
 // ================= CREATE SHIPMENT =================
 function CreateShipmentPage() {
   const navigate = useNavigate();
-
   const handleSubmit = async (data: any) => {
     await packageService.create(data);
     navigate("/admin/shipments");
   };
-
   return (
     <div className="max-w-2xl mx-auto space-y-6">
       <div>
         <h2 className="text-2xl font-bold text-slate-900">Create New Shipment</h2>
         <p className="text-slate-500">Fill in the details to create a new package shipment</p>
       </div>
-      <Card>
-        <CardContent className="pt-6">
-          <PackageForm onSubmit={handleSubmit} />
-        </CardContent>
-      </Card>
+      <Card><CardContent className="pt-6"><PackageForm onSubmit={handleSubmit} /></CardContent></Card>
     </div>
   );
 }
@@ -679,19 +657,28 @@ function CreateShipmentPage() {
 function LeaderboardPage() {
   const [leaderboard, setLeaderboard] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    let cancelled = false;
     async function load() {
       try {
         const data = await packageService.getLeaderboard();
-        setLeaderboard(data);
-      } catch (err) {
-        console.error("Leaderboard load error:", err);
+        if (!cancelled) {
+          setLeaderboard(Array.isArray(data) ? data : []);
+          setError(null);
+        }
+      } catch (err: any) {
+        if (!cancelled) {
+          console.error("Leaderboard load error:", err);
+          setError(err?.message || "Failed to load leaderboard");
+        }
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     }
     load();
+    return () => { cancelled = true; };
   }, []);
 
   return (
@@ -700,20 +687,15 @@ function LeaderboardPage() {
         <h2 className="text-2xl font-bold text-slate-900">Fastest Carriers Leaderboard</h2>
         <p className="text-slate-500">See which carriers are the speediest</p>
       </div>
-
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-xl">
-            <Trophy className="h-6 w-6 text-yellow-500" />
-            Top Performers
-          </CardTitle>
+          <CardTitle className="flex items-center gap-2 text-xl"><Trophy className="h-6 w-6 text-yellow-500" /> Top Performers</CardTitle>
         </CardHeader>
         <CardContent>
           {loading ? (
-            <div className="text-center py-8">
-              <Loader2 className="h-8 w-8 text-blue-700 animate-spin mx-auto mb-2" />
-              <p className="text-slate-500">Loading leaderboard...</p>
-            </div>
+            <div className="text-center py-8"><Loader2 className="h-8 w-8 text-blue-700 animate-spin mx-auto mb-2" /><p className="text-slate-500">Loading leaderboard...</p></div>
+          ) : error ? (
+            <div className="text-center py-8 text-red-600"><AlertCircle className="h-8 w-8 mx-auto mb-2" /><p>{error}</p></div>
           ) : leaderboard.length > 0 ? (
             <div className="space-y-3">
               {leaderboard.map((entry, index) => {
@@ -736,10 +718,7 @@ function LeaderboardPage() {
               })}
             </div>
           ) : (
-            <div className="text-center py-8 text-slate-500">
-              <Trophy className="h-12 w-12 mx-auto mb-3 text-slate-300" />
-              <p>No delivered packages yet.</p>
-            </div>
+            <div className="text-center py-8 text-slate-500"><Trophy className="h-12 w-12 mx-auto mb-3 text-slate-300" /><p>No delivered packages yet.</p></div>
           )}
         </CardContent>
       </Card>
@@ -755,7 +734,6 @@ function SettingsPage() {
         <h2 className="text-2xl font-bold text-slate-900">Settings</h2>
         <p className="text-slate-500">Configure your TitanRoute admin panel</p>
       </div>
-
       <Card>
         <CardHeader><CardTitle>Application Information</CardTitle></CardHeader>
         <CardContent className="space-y-4">
@@ -767,16 +745,13 @@ function SettingsPage() {
           </div>
         </CardContent>
       </Card>
-
       <Card>
         <CardHeader><CardTitle>Environment</CardTitle></CardHeader>
         <CardContent>
           <div className="space-y-2 text-sm">
             <div className="flex justify-between">
               <span className="text-slate-500">Supabase URL</span>
-              <span className="font-mono text-slate-900">
-                {import.meta.env.VITE_SUPABASE_URL ? "✅ Configured" : "❌ Not set (using localStorage)"}
-              </span>
+              <span className="font-mono text-slate-900">{import.meta.env.VITE_SUPABASE_URL ? "Configured" : "Not set (using localStorage)"}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-slate-500">Admin Email</span>
@@ -801,63 +776,36 @@ function PackageForm({ initialData, onSubmit }: { initialData?: Package; onSubmi
     notes: initialData?.notes || "",
     fishAvatar: initialData?.fishAvatar || "express",
   });
-
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     onSubmit({ ...formData, weight: parseFloat(formData.weight) || 0 });
   };
-
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       <div className="grid grid-cols-2 gap-3">
-        <div>
-          <label className="text-sm font-medium text-slate-700">Sender Name</label>
-          <Input value={formData.senderName} onChange={(e) => setFormData({ ...formData, senderName: e.target.value })} required />
-        </div>
-        <div>
-          <label className="text-sm font-medium text-slate-700">Recipient Name</label>
-          <Input value={formData.recipientName} onChange={(e) => setFormData({ ...formData, recipientName: e.target.value })} required />
-        </div>
+        <div><label className="text-sm font-medium text-slate-700">Sender Name</label><Input value={formData.senderName} onChange={(e) => setFormData({ ...formData, senderName: e.target.value })} required /></div>
+        <div><label className="text-sm font-medium text-slate-700">Recipient Name</label><Input value={formData.recipientName} onChange={(e) => setFormData({ ...formData, recipientName: e.target.value })} required /></div>
       </div>
-      <div>
-        <label className="text-sm font-medium text-slate-700">Address</label>
-        <Input value={formData.address} onChange={(e) => setFormData({ ...formData, address: e.target.value })} required />
-      </div>
+      <div><label className="text-sm font-medium text-slate-700">Address</label><Input value={formData.address} onChange={(e) => setFormData({ ...formData, address: e.target.value })} required /></div>
       <div className="grid grid-cols-2 gap-3">
-        <div>
-          <label className="text-sm font-medium text-slate-700">Phone</label>
-          <Input value={formData.phone} onChange={(e) => setFormData({ ...formData, phone: e.target.value })} required />
-        </div>
-        <div>
-          <label className="text-sm font-medium text-slate-700">Weight (kg)</label>
-          <Input type="number" step="0.01" value={formData.weight} onChange={(e) => setFormData({ ...formData, weight: e.target.value })} required />
-        </div>
+        <div><label className="text-sm font-medium text-slate-700">Phone</label><Input value={formData.phone} onChange={(e) => setFormData({ ...formData, phone: e.target.value })} required /></div>
+        <div><label className="text-sm font-medium text-slate-700">Weight (kg)</label><Input type="number" step="0.01" value={formData.weight} onChange={(e) => setFormData({ ...formData, weight: e.target.value })} required /></div>
       </div>
-      <div>
-        <label className="text-sm font-medium text-slate-700">Description</label>
-        <Input value={formData.description} onChange={(e) => setFormData({ ...formData, description: e.target.value })} />
-      </div>
-      <div>
-        <label className="text-sm font-medium text-slate-700">Notes</label>
-        <Input value={formData.notes} onChange={(e) => setFormData({ ...formData, notes: e.target.value })} />
-      </div>
+      <div><label className="text-sm font-medium text-slate-700">Description</label><Input value={formData.description} onChange={(e) => setFormData({ ...formData, description: e.target.value })} /></div>
+      <div><label className="text-sm font-medium text-slate-700">Notes</label><Input value={formData.notes} onChange={(e) => setFormData({ ...formData, notes: e.target.value })} /></div>
       <div>
         <label className="text-sm font-medium text-slate-700">Assigned Carrier</label>
         <Select value={formData.fishAvatar} onValueChange={(v) => setFormData({ ...formData, fishAvatar: v })}>
           <SelectTrigger><SelectValue /></SelectTrigger>
           <SelectContent>
             {CARRIER_AVATARS.map((c) => (
-              <SelectItem key={c.id} value={c.id}>
-                <span className="flex items-center gap-2"><span>{c.emoji}</span>{c.name}</span>
-              </SelectItem>
+              <SelectItem key={c.id} value={c.id}><span className="flex items-center gap-2"><span>{c.emoji}</span>{c.name}</span></SelectItem>
             ))}
           </SelectContent>
         </Select>
       </div>
       <div className="pt-2 flex justify-end">
-        <Button type="submit" className="bg-blue-700 hover:bg-blue-800">
-          {initialData ? "Update Package" : "Create Package"}
-        </Button>
+        <Button type="submit" className="bg-blue-700 hover:bg-blue-800">{initialData ? "Update Package" : "Create Package"}</Button>
       </div>
     </form>
   );
@@ -866,12 +814,10 @@ function PackageForm({ initialData, onSubmit }: { initialData?: Package; onSubmi
 function StatusForm({ currentStatus, onSubmit, onCancel }: { currentStatus: string; onSubmit: (data: any) => void; onCancel: () => void }) {
   const [status, setStatus] = useState<any>(currentStatus);
   const [reason, setReason] = useState("");
-
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     onSubmit({ status, reason: status === "held_by_customs" ? reason : undefined });
   };
-
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       <div>
@@ -888,15 +834,10 @@ function StatusForm({ currentStatus, onSubmit, onCancel }: { currentStatus: stri
         </Select>
       </div>
       {status === "held_by_customs" && (
-        <div>
-          <label className="text-sm font-medium text-slate-700">Reason</label>
-          <Input placeholder="e.g., Missing invoice" value={reason} onChange={(e) => setReason(e.target.value)} required />
-        </div>
+        <div><label className="text-sm font-medium text-slate-700">Reason</label><Input placeholder="e.g., Missing invoice" value={reason} onChange={(e) => setReason(e.target.value)} required /></div>
       )}
       <div className="flex justify-end gap-2 pt-2">
-        <Button type="button" variant="outline" onClick={onCancel}>
-          <X className="h-4 w-4 mr-1" /> Cancel
-        </Button>
+        <Button type="button" variant="outline" onClick={onCancel}><X className="h-4 w-4 mr-1" /> Cancel</Button>
         <Button type="submit" className="bg-blue-700 hover:bg-blue-800">Update Status</Button>
       </div>
     </form>
