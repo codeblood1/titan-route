@@ -37,12 +37,10 @@ export interface LeaderboardEntry {
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string | undefined;
 const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
 
-let supabase: SupabaseClient | null = null;
-if (supabaseUrl && supabaseKey) {
-  supabase = createClient(supabaseUrl, supabaseKey);
-}
+export const supabase: SupabaseClient | null =
+  supabaseUrl && supabaseKey ? createClient(supabaseUrl, supabaseKey) : null;
 
-const USE_LOCAL = !supabase;
+export const USE_LOCAL = !supabase;
 
 // LocalStorage helpers
 const LS_PACKAGES = "fishtrack_packages";
