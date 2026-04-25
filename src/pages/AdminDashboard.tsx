@@ -20,6 +20,7 @@ import {
   BarChart3,
   Ship,
   Truck,
+  Loader2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -60,9 +61,20 @@ const sidebarItems = [
 ];
 
 export default function AdminDashboard() {
-  const { user, isAuthenticated, logout } = useAuth();
+  const { user, isAuthenticated, logout, isLoading } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+        <div className="text-center">
+          <Loader2 className="h-10 w-10 text-blue-700 animate-spin mx-auto mb-4" />
+          <p className="text-slate-600 font-medium">Loading admin panel...</p>
+        </div>
+      </div>
+    );
+  }
 
   if (!isAuthenticated) {
     return (
@@ -273,13 +285,17 @@ function DashboardOverview() {
 
   useEffect(() => {
     async function load() {
-      const packages = await packageService.list();
-      setStats({
-        total: packages.length,
-        delivered: packages.filter((p) => p.status === "delivered").length,
-        inTransit: packages.filter((p) => p.status === "sent" || p.status === "received").length,
-        held: packages.filter((p) => p.status === "held_by_customs").length,
-      });
+      try {
+        const packages = await packageService.list();
+        setStats({
+          total: packages.length,
+          delivered: packages.filter((p) => p.status === "delivered").length,
+          inTransit: packages.filter((p) => p.status === "sent" || p.status === "received").length,
+          held: packages.filter((p) => p.status === "held_by_customs").length,
+        });
+      } catch (err) {
+        console.error("Failed to load dashboard stats:", err);
+      }
     }
     load();
   }, []);
@@ -364,11 +380,15 @@ function ShipmentsPage({ limit }: { limit?: number }) {
 
   useEffect(() => {
     async function load() {
-      const data = await packageService.list({
-        search: search || undefined,
-        status: statusFilter || undefined,
-      });
-      setPackages(data);
+      try {
+        const data = await packageService.list({
+          search: search || undefined,
+          status: statusFilter || undefined,
+        });
+        setPackages(data);
+      } catch (err) {
+        console.error("Failed to load shipments:", err);
+      }
     }
     load();
   }, [search, statusFilter, refreshKey]);
@@ -653,8 +673,12 @@ function LeaderboardPage() {
 
   useEffect(() => {
     async function load() {
-      const data = await packageService.getLeaderboard();
-      setLeaderboard(data);
+      try {
+        const data = await packageService.getLeaderboard();
+        setLeaderboard(data);
+      } catch (err) {
+        console.error("Failed to load leaderboard:", err);
+      }
     }
     load();
   }, []);

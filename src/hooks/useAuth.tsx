@@ -23,8 +23,8 @@ const ADMIN_PASSWORD = import.meta.env.VITE_ADMIN_PASSWORD || "admin123";
 const ADMIN_EMAIL = import.meta.env.VITE_ADMIN_EMAIL || "admin@titanroute.com";
 const LS_AUTH_KEY = "titanroute_admin_auth";
 
-// True if Supabase credentials are configured
-const HAS_SUPABASE = !!supabase;
+// True if Supabase credentials are actually configured
+const HAS_SUPABASE = !!(supabase);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AdminUser | null>(null);
@@ -47,23 +47,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       // Fallback: check localStorage
-      const stored = localStorage.getItem(LS_AUTH_KEY);
-      if (stored) {
-        try {
+      try {
+        const stored = localStorage.getItem(LS_AUTH_KEY);
+        if (stored) {
           const parsed = JSON.parse(stored);
           if (parsed?.token === "authenticated" && parsed?.user) {
             setUser(parsed.user);
           }
-        } catch {
-          localStorage.removeItem(LS_AUTH_KEY);
         }
+      } catch {
+        localStorage.removeItem(LS_AUTH_KEY);
       }
       setIsLoading(false);
     }
 
     checkSession();
 
-    // Listen for Supabase auth state changes (login/logout from other tabs, token refresh, etc.)
+    // Listen for Supabase auth state changes
     let subscription: { unsubscribe: () => void } | null = null;
     if (HAS_SUPABASE) {
       const { data } = supabase!.auth.onAuthStateChange(async (event, session) => {
@@ -87,24 +87,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   async function loadSupabaseUser(userId: string, email: string): Promise<AdminUser | null> {
     if (!HAS_SUPABASE) return null;
 
-    const { data: roleData, error } = await supabase!
-      .from("admin_roles")
-      .select("role, full_name")
-      .eq("user_id", userId)
-      .eq("is_active", true)
-      .single();
+    try {
+      const { data: roleData, error } = await supabase!
+        .from("admin_roles")
+        .select("role, full_name")
+        .eq("user_id", userId)
+        .eq("is_active", true)
+        .single();
 
-    if (error || !roleData) {
-      // User exists in auth.users but has no admin role assigned
+      if (error || !roleData) {
+        console.warn("User has no admin role:", error?.message);
+        return null;
+      }
+
+      return {
+        id: userId,
+        email: email.toLowerCase(),
+        name: roleData.full_name || email.split("@")[0] || "Admin",
+        role: roleData.role,
+      };
+    } catch (err) {
+      console.error("Error loading admin role:", err);
       return null;
     }
-
-    return {
-      id: userId,
-      email: email.toLowerCase(),
-      name: roleData.full_name || email.split("@")[0] || "Admin",
-      role: roleData.role,
-    };
   }
 
   const login = useCallback(async (email: string, password: string): Promise<boolean> => {
@@ -113,26 +118,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     // Try Supabase Auth first (if configured)
     if (HAS_SUPABASE) {
-      const { data, error } = await supabase!.auth.signInWithPassword({
-        email: trimmedEmail,
-        password: trimmedPassword,
-      });
+      try {
+        const { data, error } = await supabase!.auth.signInWithPassword({
+          email: trimmedEmail,
+          password: trimmedPassword,
+        });
 
-      if (error || !data.user) {
+        if (error || !data.user) {
+          console.warn("Supabase auth failed:", error?.message);
+          return false;
+        }
+
+        // Check if this user has an admin role
+        const adminUser = await loadSupabaseUser(data.user.id, data.user.email ?? trimmedEmail);
+        if (adminUser) {
+          setUser(adminUser);
+          return true;
+        }
+
+        // User authenticated but has no admin role — sign them out
+        await supabase!.auth.signOut();
+        return false;
+      } catch (err) {
+        console.error("Supabase login error:", err);
         return false;
       }
-
-      // Check if this user has an admin role
-      const adminUser = await loadSupabaseUser(data.user.id, data.user.email ?? trimmedEmail);
-      if (adminUser) {
-        setUser(adminUser);
-        // Supabase handles its own session storage; no need for localStorage
-        return true;
-      }
-
-      // User authenticated but has no admin role — sign them out
-      await supabase!.auth.signOut();
-      return false;
     }
 
     // Fallback: simple password check (localStorage mode)
