@@ -17,9 +17,10 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
+// Use env vars if available (for production Supabase), otherwise hardcoded demo credentials
 const ADMIN_PASSWORD = import.meta.env.VITE_ADMIN_PASSWORD || "admin123";
-const ADMIN_EMAIL = import.meta.env.VITE_ADMIN_EMAIL || "admin@fishtrack.com";
-const LS_AUTH_KEY = "fishtrack_admin_auth";
+const ADMIN_EMAIL = import.meta.env.VITE_ADMIN_EMAIL || "admin@titanroute.com";
+const LS_AUTH_KEY = "titanroute_admin_auth";
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AdminUser | null>(null);
@@ -41,10 +42,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const login = useCallback(async (email: string, password: string): Promise<boolean> => {
-    if (email === ADMIN_EMAIL && password === ADMIN_PASSWORD) {
+    const trimmedEmail = email.trim().toLowerCase();
+    const trimmedPassword = password.trim();
+    const expectedEmail = ADMIN_EMAIL.trim().toLowerCase();
+    const expectedPassword = ADMIN_PASSWORD.trim();
+
+    if (trimmedEmail === expectedEmail && trimmedPassword === expectedPassword) {
       const adminUser: AdminUser = {
         id: "admin-1",
-        email: ADMIN_EMAIL,
+        email: expectedEmail,
         name: "Administrator",
         role: "admin",
       };
