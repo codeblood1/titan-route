@@ -18,13 +18,15 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
-// Fallback credentials for localStorage-only mode (when Supabase is not configured)
-const ADMIN_PASSWORD = import.meta.env.VITE_ADMIN_PASSWORD || "admin123";
-const ADMIN_EMAIL = import.meta.env.VITE_ADMIN_EMAIL || "admin@titanroute.com";
-const LS_AUTH_KEY = "titanroute_admin_auth";
+// Hardcoded fallback for demo mode (when Supabase is not configured)
+const FALLBACK_EMAIL = "admin@titanroute.com";
+const FALLBACK_PASSWORD = "admin123";
+const LS_AUTH_KEY = "titanroute_auth_v2";
 
-// True if Supabase credentials are actually configured
+// Check if Supabase is actually configured
 const HAS_SUPABASE = !!(supabase);
+console.log("[Auth] HAS_SUPABASE:", HAS_SUPABASE);
+console.log("[Auth] Supabase client:", supabase ? "initialized" : "null");
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AdminUser | null>(null);
@@ -33,16 +35,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // On mount: check for existing session
   useEffect(() => {
     async function checkSession() {
+      console.log("[Auth] Checking session... HAS_SUPABASE:", HAS_SUPABASE);
+      
       if (HAS_SUPABASE) {
-        // Try Supabase session first
-        const { data: { session } } = await supabase!.auth.getSession();
-        if (session?.user) {
-          const adminUser = await loadSupabaseUser(session.user.id, session.user.email ?? "");
-          if (adminUser) {
-            setUser(adminUser);
-            setIsLoading(false);
-            return;
+        try {
+          const { data: { session } } = await supabase!.auth.getSession();
+          console.log("[Auth] Supabase session:", session ? "found" : "none");
+          if (session?.user) {
+            const adminUser = await loadSupabaseUser(session.user.id, session.user.email ?? "");
+            if (adminUser) {
+              console.log("[Auth] Loaded Supabase admin user:", adminUser.email);
+              setUser(adminUser);
+              setIsLoading(false);
+              return;
+            }
           }
+        } catch (err) {
+          console.error("[Auth] Supabase session check failed:", err);
         }
       }
 
@@ -52,6 +61,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (stored) {
           const parsed = JSON.parse(stored);
           if (parsed?.token === "authenticated" && parsed?.user) {
+            console.log("[Auth] Loaded localStorage user:", parsed.user.email);
             setUser(parsed.user);
           }
         }
@@ -67,6 +77,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     let subscription: { unsubscribe: () => void } | null = null;
     if (HAS_SUPABASE) {
       const { data } = supabase!.auth.onAuthStateChange(async (event, session) => {
+        console.log("[Auth] Auth state change:", event);
         if (event === "SIGNED_IN" && session?.user) {
           const adminUser = await loadSupabaseUser(session.user.id, session.user.email ?? "");
           if (adminUser) setUser(adminUser);
@@ -86,7 +97,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Load admin role from Supabase admin_roles table
   async function loadSupabaseUser(userId: string, email: string): Promise<AdminUser | null> {
     if (!HAS_SUPABASE) return null;
-
     try {
       const { data: roleData, error } = await supabase!
         .from("admin_roles")
@@ -96,7 +106,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         .single();
 
       if (error || !roleData) {
-        console.warn("User has no admin role:", error?.message);
+        console.warn("[Auth] No admin role found for user:", userId, error?.message);
         return null;
       }
 
@@ -107,7 +117,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         role: roleData.role,
       };
     } catch (err) {
-      console.error("Error loading admin role:", err);
+      console.error("[Auth] Error loading admin role:", err);
       return null;
     }
   }
@@ -115,44 +125,52 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const login = useCallback(async (email: string, password: string): Promise<boolean> => {
     const trimmedEmail = email.trim().toLowerCase();
     const trimmedPassword = password.trim();
+    
+    console.log("[Auth] Login attempt:", trimmedEmail, "| HAS_SUPABASE:", HAS_SUPABASE);
 
     // Try Supabase Auth first (if configured)
     if (HAS_SUPABASE) {
       try {
+        console.log("[Auth] Trying Supabase auth...");
         const { data, error } = await supabase!.auth.signInWithPassword({
           email: trimmedEmail,
           password: trimmedPassword,
         });
 
         if (error || !data.user) {
-          console.warn("Supabase auth failed:", error?.message);
+          console.warn("[Auth] Supabase auth failed:", error?.message);
           return false;
         }
 
-        // Check if this user has an admin role
+        console.log("[Auth] Supabase auth success, checking admin role...");
         const adminUser = await loadSupabaseUser(data.user.id, data.user.email ?? trimmedEmail);
         if (adminUser) {
+          console.log("[Auth] Admin role confirmed, logged in:", adminUser.email);
           setUser(adminUser);
           return true;
         }
 
-        // User authenticated but has no admin role — sign them out
+        console.warn("[Auth] User authenticated but no admin role");
         await supabase!.auth.signOut();
         return false;
       } catch (err) {
-        console.error("Supabase login error:", err);
+        console.error("[Auth] Supabase login error:", err);
         return false;
       }
     }
 
-    // Fallback: simple password check (localStorage mode)
-    const expectedEmail = ADMIN_EMAIL.trim().toLowerCase();
-    const expectedPassword = ADMIN_PASSWORD.trim();
+    // Fallback: simple password check
+    console.log("[Auth] Using fallback auth mode");
+    console.log("[Auth] Expected email:", FALLBACK_EMAIL);
+    console.log("[Auth] Input email:", trimmedEmail);
+    console.log("[Auth] Email match:", trimmedEmail === FALLBACK_EMAIL.trim().toLowerCase());
+    console.log("[Auth] Password match:", trimmedPassword === FALLBACK_PASSWORD.trim());
 
-    if (trimmedEmail === expectedEmail && trimmedPassword === expectedPassword) {
+    if (trimmedEmail === FALLBACK_EMAIL.trim().toLowerCase() && trimmedPassword === FALLBACK_PASSWORD.trim()) {
+      console.log("[Auth] Fallback login successful");
       const adminUser: AdminUser = {
         id: "admin-1",
-        email: expectedEmail,
+        email: FALLBACK_EMAIL,
         name: "Administrator",
         role: "admin",
       };
@@ -160,10 +178,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       localStorage.setItem(LS_AUTH_KEY, JSON.stringify({ token: "authenticated", user: adminUser }));
       return true;
     }
+    
+    console.warn("[Auth] Fallback login failed - credentials mismatch");
     return false;
   }, []);
 
   const logout = useCallback(async () => {
+    console.log("[Auth] Logging out...");
     if (HAS_SUPABASE) {
       await supabase!.auth.signOut();
     }

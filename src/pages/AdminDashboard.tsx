@@ -1,8 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router";
 import { useAuth } from "@/hooks/useAuth";
-import { packageService } from "@/lib/supabase";
-import type { Package } from "@/lib/supabase";
+import { packageService, type Package } from "@/lib/supabase";
 import {
   LayoutDashboard,
   Package,
@@ -21,6 +20,8 @@ import {
   Ship,
   Truck,
   Loader2,
+  AlertCircle,
+  CheckCircle2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -65,6 +66,7 @@ export default function AdminDashboard() {
   const navigate = useNavigate();
   const location = useLocation();
 
+  // Show loading spinner while auth initializes
   if (isLoading) {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center">
@@ -76,19 +78,29 @@ export default function AdminDashboard() {
     );
   }
 
+  // Not logged in — show access required (not a white screen!)
   if (!isAuthenticated) {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center px-4">
-        <Card className="w-full max-w-md text-center p-8">
-          <div className="text-5xl mb-4">🛡️</div>
+        <Card className="w-full max-w-md text-center p-8 shadow-xl">
+          <div className="w-16 h-16 bg-red-50 rounded-full flex items-center justify-center mx-auto mb-4">
+            <AlertCircle className="h-8 w-8 text-red-500" />
+          </div>
           <h2 className="text-2xl font-bold text-slate-900 mb-2">Admin Access Required</h2>
-          <p className="text-slate-600 mb-6">
-            This area is protected. Please sign in with an admin account.
+          <p className="text-slate-500 mb-6">
+            You must be signed in as an administrator to access this area.
           </p>
-          <Button onClick={() => navigate("/login")} className="bg-blue-700 hover:bg-blue-800">
+          <Button
+            onClick={() => navigate("/login")}
+            className="bg-blue-700 hover:bg-blue-800"
+          >
             Sign In
           </Button>
-          <Button variant="ghost" onClick={() => navigate("/")} className="ml-2">
+          <Button
+            variant="ghost"
+            onClick={() => navigate("/")}
+            className="ml-2"
+          >
             Go Home
           </Button>
         </Card>
@@ -96,9 +108,9 @@ export default function AdminDashboard() {
     );
   }
 
-  // Conditional rendering based on path - avoids nested Routes issues
+  // Determine active page from URL path
+  const path = location.pathname;
   const renderContent = () => {
-    const path = location.pathname;
     if (path === "/admin/create") return <CreateShipmentPage />;
     if (path === "/admin/shipments") return <ShipmentsPage />;
     if (path === "/admin/leaderboard") return <LeaderboardPage />;
@@ -106,11 +118,11 @@ export default function AdminDashboard() {
     return <DashboardOverview />;
   };
 
-  const activeLabel = sidebarItems.find((i) => i.path === location.pathname)?.label || "Dashboard";
+  const activeLabel = sidebarItems.find((i) => i.path === path)?.label || "Dashboard";
 
   return (
     <div className="min-h-screen bg-slate-50 flex">
-      {/* Sidebar */}
+      {/* Sidebar - Desktop */}
       <aside className="w-64 bg-slate-900 text-slate-300 flex-shrink-0 hidden md:flex flex-col sticky top-0 h-screen">
         <div className="p-6 border-b border-slate-800">
           <div className="flex items-center gap-3">
@@ -126,7 +138,7 @@ export default function AdminDashboard() {
 
         <nav className="flex-1 py-4 px-3 space-y-1">
           {sidebarItems.map((item) => {
-            const isActive = location.pathname === item.path;
+            const isActive = path === item.path;
             return (
               <button
                 key={item.path}
@@ -146,18 +158,18 @@ export default function AdminDashboard() {
 
         <div className="p-4 border-t border-slate-800">
           <div className="flex items-center gap-3 mb-3">
-            <div className="w-8 h-8 rounded-full bg-blue-600/20 flex items-center justify-center text-sm text-blue-400">
-              {user?.name?.charAt(0) || "A"}
+            <div className="w-8 h-8 rounded-full bg-blue-600/20 flex items-center justify-center text-sm text-blue-400 font-bold">
+              {user?.name?.charAt(0).toUpperCase() || "A"}
             </div>
-            <div className="text-sm">
-              <p className="text-white font-medium">{user?.name}</p>
-              <p className="text-slate-500 text-xs">{user?.email}</p>
+            <div className="text-sm overflow-hidden">
+              <p className="text-white font-medium truncate">{user?.name}</p>
+              <p className="text-slate-500 text-xs truncate">{user?.email}</p>
             </div>
           </div>
           <Button
             variant="ghost"
             size="sm"
-            onClick={logout}
+            onClick={() => logout()}
             className="w-full text-slate-400 hover:text-white hover:bg-slate-800 justify-start"
           >
             <LogOut className="h-4 w-4 mr-2" />
@@ -166,8 +178,8 @@ export default function AdminDashboard() {
         </div>
       </aside>
 
-      {/* Mobile sidebar overlay */}
-      <MobileSidebar />
+      {/* Mobile FAB */}
+      <MobileNav />
 
       {/* Main Content */}
       <div className="flex-1 flex flex-col min-w-0">
@@ -185,13 +197,13 @@ export default function AdminDashboard() {
             <span className="text-slate-900 font-medium">{activeLabel}</span>
           </div>
           <div className="flex items-center gap-3">
-            <Badge variant="outline" className="text-xs hidden sm:inline-flex">
+            <Badge variant="outline" className="text-xs hidden sm:inline-flex capitalize">
               {user?.role}
             </Badge>
             <Button
               variant="ghost"
               size="sm"
-              onClick={logout}
+              onClick={() => logout()}
               className="text-slate-600 hidden md:flex"
             >
               <LogOut className="h-4 w-4 mr-1" />
@@ -200,7 +212,7 @@ export default function AdminDashboard() {
           </div>
         </header>
 
-        {/* Content Area - CONDITIONAL RENDERING (no nested Routes) */}
+        {/* Page Content */}
         <main className="flex-1 p-4 md:p-6 overflow-auto">
           {renderContent()}
         </main>
@@ -209,7 +221,8 @@ export default function AdminDashboard() {
   );
 }
 
-function MobileSidebar() {
+// Mobile Navigation Overlay
+function MobileNav() {
   const [open, setOpen] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
@@ -243,10 +256,7 @@ function MobileSidebar() {
                 return (
                   <button
                     key={item.path}
-                    onClick={() => {
-                      navigate(item.path);
-                      setOpen(false);
-                    }}
+                    onClick={() => { navigate(item.path); setOpen(false); }}
                     className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
                       isActive
                         ? "bg-blue-700 text-white"
@@ -263,10 +273,7 @@ function MobileSidebar() {
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={() => {
-                  logout();
-                  setOpen(false);
-                }}
+                onClick={() => { logout(); setOpen(false); }}
                 className="w-full text-slate-400 hover:text-white hover:bg-slate-800 justify-start"
               >
                 <LogOut className="h-4 w-4 mr-2" />
@@ -280,8 +287,10 @@ function MobileSidebar() {
   );
 }
 
+// ================= DASHBOARD =================
 function DashboardOverview() {
   const [stats, setStats] = useState({ total: 0, delivered: 0, inTransit: 0, held: 0 });
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     async function load() {
@@ -294,11 +303,30 @@ function DashboardOverview() {
           held: packages.filter((p) => p.status === "held_by_customs").length,
         });
       } catch (err) {
-        console.error("Failed to load dashboard stats:", err);
+        console.error("Dashboard stats error:", err);
+      } finally {
+        setLoading(false);
       }
     }
     load();
   }, []);
+
+  if (loading) {
+    return (
+      <div className="space-y-6">
+        <h2 className="text-2xl font-bold text-slate-900">Dashboard</h2>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {[1, 2, 3, 4].map((i) => (
+            <Card key={i}>
+              <CardContent className="p-4">
+                <div className="h-16 bg-slate-100 rounded animate-pulse" />
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -325,7 +353,7 @@ function DashboardOverview() {
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-lg bg-emerald-50 flex items-center justify-center">
-                <Package className="h-5 w-5 text-emerald-600" />
+                <CheckCircle2 className="h-5 w-5 text-emerald-600" />
               </div>
               <div>
                 <p className="text-2xl font-bold text-slate-900">{stats.delivered}</p>
@@ -351,7 +379,7 @@ function DashboardOverview() {
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-lg bg-orange-50 flex items-center justify-center">
-                <Package className="h-5 w-5 text-orange-600" />
+                <AlertCircle className="h-5 w-5 text-orange-600" />
               </div>
               <div>
                 <p className="text-2xl font-bold text-slate-900">{stats.held}</p>
@@ -367,19 +395,24 @@ function DashboardOverview() {
   );
 }
 
+// ================= SHIPMENTS PAGE =================
 function ShipmentsPage({ limit }: { limit?: number }) {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("");
   const [page, setPage] = useState(0);
   const [packages, setPackages] = useState<Package[]>([]);
-  const [createOpen, setCreateOpen] = useState(false);
-  const [editPackage, setEditPackage] = useState<Package | null>(null);
-  const [statusPackage, setStatusPackage] = useState<Package | null>(null);
-  const [deletePackage, setDeletePackage] = useState<Package | null>(null);
+  const [loading, setLoading] = useState(true);
   const [refreshKey, setRefreshKey] = useState(0);
+
+  // Dialog states
+  const [createOpen, setCreateOpen] = useState(false);
+  const [editPkg, setEditPkg] = useState<Package | null>(null);
+  const [statusPkg, setStatusPkg] = useState<Package | null>(null);
+  const [deletePkg, setDeletePkg] = useState<Package | null>(null);
 
   useEffect(() => {
     async function load() {
+      setLoading(true);
       try {
         const data = await packageService.list({
           search: search || undefined,
@@ -387,16 +420,16 @@ function ShipmentsPage({ limit }: { limit?: number }) {
         });
         setPackages(data);
       } catch (err) {
-        console.error("Failed to load shipments:", err);
+        console.error("Shipments load error:", err);
+      } finally {
+        setLoading(false);
       }
     }
     load();
   }, [search, statusFilter, refreshKey]);
 
-  const paginatedPackages = limit
-    ? packages.slice(0, limit)
-    : packages.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
-  const totalPages = Math.ceil((packages?.length || 0) / PAGE_SIZE);
+  const paginated = limit ? packages.slice(0, limit) : packages.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
+  const totalPages = Math.ceil(packages.length / PAGE_SIZE);
 
   const handleCreate = async (data: any) => {
     await packageService.create(data);
@@ -405,23 +438,23 @@ function ShipmentsPage({ limit }: { limit?: number }) {
   };
 
   const handleUpdate = async (data: any) => {
-    if (!editPackage) return;
-    await packageService.update(editPackage.id, data);
-    setEditPackage(null);
+    if (!editPkg) return;
+    await packageService.update(editPkg.id, data);
+    setEditPkg(null);
     setRefreshKey((k) => k + 1);
   };
 
   const handleStatusUpdate = async (data: any) => {
-    if (!statusPackage) return;
-    await packageService.updateStatus(statusPackage.id, data.status, data.reason);
-    setStatusPackage(null);
+    if (!statusPkg) return;
+    await packageService.updateStatus(statusPkg.id, data.status, data.reason);
+    setStatusPkg(null);
     setRefreshKey((k) => k + 1);
   };
 
   const handleDelete = async () => {
-    if (!deletePackage) return;
-    await packageService.delete(deletePackage.id);
-    setDeletePackage(null);
+    if (!deletePkg) return;
+    await packageService.delete(deletePkg.id);
+    setDeletePkg(null);
     setRefreshKey((k) => k + 1);
   };
 
@@ -434,7 +467,7 @@ function ShipmentsPage({ limit }: { limit?: number }) {
         </div>
       )}
 
-      {/* Filters & Actions */}
+      {/* Filters */}
       <Card>
         <CardContent className="pt-6">
           <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between">
@@ -472,154 +505,132 @@ function ShipmentsPage({ limit }: { limit?: number }) {
               </DialogTrigger>
               <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
-                  <DialogTitle className="flex items-center gap-2">
-                    <span className="text-2xl">📦</span>
-                    Create New Package
-                  </DialogTitle>
+                  <DialogTitle>Create New Package</DialogTitle>
                 </DialogHeader>
-                <PackageForm onSubmit={handleCreate} isLoading={false} />
+                <PackageForm onSubmit={handleCreate} />
               </DialogContent>
             </Dialog>
           </div>
         </CardContent>
       </Card>
 
-      {/* Packages Table */}
+      {/* Table */}
       <Card>
         <CardContent className="p-0">
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Tracking</TableHead>
-                  <TableHead>Carrier</TableHead>
-                  <TableHead>Recipient</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Weight</TableHead>
-                  <TableHead>Created</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {paginatedPackages.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={7} className="text-center py-8 text-slate-500">
-                      No packages found. Create one to get started!
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  paginatedPackages.map((pkg) => {
-                    const carrier = CARRIER_AVATARS.find((f) => f.id === pkg.fishAvatar) || CARRIER_AVATARS[0];
-                    return (
-                      <TableRow key={pkg.id}>
-                        <TableCell className="font-mono text-sm font-medium">
-                          {pkg.trackingCode}
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-2">
-                            <span className="text-lg">{carrier.emoji}</span>
-                            <span className="text-sm">{carrier.name}</span>
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-sm">{pkg.recipientName}</TableCell>
-                        <TableCell>
-                          <Badge className={`${STATUS_COLORS[pkg.status]} text-white text-xs`}>
-                            {STATUS_LABELS[pkg.status]}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="text-sm">{pkg.weight} kg</TableCell>
-                        <TableCell className="text-sm text-slate-500">
-                          {new Date(pkg.createdAt).toLocaleDateString()}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex items-center justify-end gap-1">
-                            <Button variant="ghost" size="sm" onClick={() => setEditPackage(pkg)}>
-                              <Edit className="h-4 w-4" />
-                            </Button>
-                            <Button variant="ghost" size="sm" onClick={() => setStatusPackage(pkg)}>
-                              <Package className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="text-red-500 hover:text-red-700"
-                              onClick={() => setDeletePackage(pkg)}
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </div>
+          {loading ? (
+            <div className="p-8 text-center">
+              <Loader2 className="h-8 w-8 text-blue-700 animate-spin mx-auto mb-2" />
+              <p className="text-slate-500">Loading shipments...</p>
+            </div>
+          ) : (
+            <>
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Tracking</TableHead>
+                      <TableHead>Carrier</TableHead>
+                      <TableHead>Recipient</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Weight</TableHead>
+                      <TableHead>Created</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {paginated.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={7} className="text-center py-8 text-slate-500">
+                          No packages found.
                         </TableCell>
                       </TableRow>
-                    );
-                  })
-                )}
-              </TableBody>
-            </Table>
-          </div>
-
-          {!limit && totalPages > 1 && (
-            <div className="flex items-center justify-between px-4 py-3 border-t border-slate-200">
-              <p className="text-sm text-slate-500">
-                Showing {page * PAGE_SIZE + 1} to {Math.min((page + 1) * PAGE_SIZE, packages?.length || 0)} of {packages?.length} packages
-              </p>
-              <div className="flex items-center gap-1">
-                <Button variant="outline" size="sm" onClick={() => setPage(page - 1)} disabled={page === 0}>
-                  <ChevronLeft className="h-4 w-4" />
-                </Button>
-                <span className="text-sm text-slate-600 px-2">
-                  Page {page + 1} of {totalPages}
-                </span>
-                <Button variant="outline" size="sm" onClick={() => setPage(page + 1)} disabled={page >= totalPages - 1}>
-                  <ChevronRight className="h-4 w-4" />
-                </Button>
+                    ) : (
+                      paginated.map((pkg) => {
+                        const carrier = CARRIER_AVATARS.find((f) => f.id === pkg.fishAvatar) || CARRIER_AVATARS[0];
+                        return (
+                          <TableRow key={pkg.id}>
+                            <TableCell className="font-mono text-sm font-medium">{pkg.trackingCode}</TableCell>
+                            <TableCell>
+                              <div className="flex items-center gap-2">
+                                <span className="text-lg">{carrier.emoji}</span>
+                                <span className="text-sm">{carrier.name}</span>
+                              </div>
+                            </TableCell>
+                            <TableCell className="text-sm">{pkg.recipientName}</TableCell>
+                            <TableCell>
+                              <Badge className={`${STATUS_COLORS[pkg.status]} text-white text-xs`}>
+                                {STATUS_LABELS[pkg.status]}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-sm">{pkg.weight} kg</TableCell>
+                            <TableCell className="text-sm text-slate-500">
+                              {new Date(pkg.createdAt).toLocaleDateString()}
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <div className="flex items-center justify-end gap-1">
+                                <Button variant="ghost" size="sm" onClick={() => setEditPkg(pkg)}>
+                                  <Edit className="h-4 w-4" />
+                                </Button>
+                                <Button variant="ghost" size="sm" onClick={() => setStatusPkg(pkg)}>
+                                  <Package className="h-4 w-4" />
+                                </Button>
+                                <Button variant="ghost" size="sm" className="text-red-500 hover:text-red-700" onClick={() => setDeletePkg(pkg)}>
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })
+                    )}
+                  </TableBody>
+                </Table>
               </div>
-            </div>
+
+              {!limit && totalPages > 1 && (
+                <div className="flex items-center justify-between px-4 py-3 border-t border-slate-200">
+                  <p className="text-sm text-slate-500">
+                    Page {page + 1} of {totalPages} ({packages.length} total)
+                  </p>
+                  <div className="flex items-center gap-1">
+                    <Button variant="outline" size="sm" onClick={() => setPage(page - 1)} disabled={page === 0}>
+                      <ChevronLeft className="h-4 w-4" />
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={() => setPage(page + 1)} disabled={page >= totalPages - 1}>
+                      <ChevronRight className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </>
           )}
         </CardContent>
       </Card>
 
       {/* Edit Dialog */}
-      <Dialog open={!!editPackage} onOpenChange={() => setEditPackage(null)}>
+      <Dialog open={!!editPkg} onOpenChange={() => setEditPkg(null)}>
         <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <span className="text-2xl">✏️</span>
-              Edit Package
-            </DialogTitle>
-          </DialogHeader>
-          {editPackage && (
-            <PackageForm
-              initialData={editPackage}
-              onSubmit={handleUpdate}
-              isLoading={false}
-            />
-          )}
+          <DialogHeader><DialogTitle>Edit Package</DialogTitle></DialogHeader>
+          {editPkg && <PackageForm initialData={editPkg} onSubmit={handleUpdate} />}
         </DialogContent>
       </Dialog>
 
-      {/* Update Status Dialog */}
-      <Dialog open={!!statusPackage} onOpenChange={() => setStatusPackage(null)}>
+      {/* Status Dialog */}
+      <Dialog open={!!statusPkg} onOpenChange={() => setStatusPkg(null)}>
         <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <span className="text-2xl">📦</span>
-              Update Status
-            </DialogTitle>
-          </DialogHeader>
-          {statusPackage && (
+          <DialogHeader><DialogTitle>Update Status</DialogTitle></DialogHeader>
+          {statusPkg && (
             <StatusForm
-              packageId={statusPackage.id}
-              currentStatus={statusPackage.status}
+              currentStatus={statusPkg.status}
               onSubmit={handleStatusUpdate}
-              isLoading={false}
-              onCancel={() => setStatusPackage(null)}
+              onCancel={() => setStatusPkg(null)}
             />
           )}
         </DialogContent>
       </Dialog>
 
-      {/* Delete Confirmation */}
-      <Dialog open={!!deletePackage} onOpenChange={() => setDeletePackage(null)}>
+      {/* Delete Dialog */}
+      <Dialog open={!!deletePkg} onOpenChange={() => setDeletePkg(null)}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-red-600">
@@ -628,16 +639,11 @@ function ShipmentsPage({ limit }: { limit?: number }) {
             </DialogTitle>
           </DialogHeader>
           <p className="text-sm text-slate-600">
-            Are you sure you want to delete package{" "}
-            <strong>{deletePackage?.trackingCode}</strong>? This action cannot be undone.
+            Delete <strong>{deletePkg?.trackingCode}</strong>? This cannot be undone.
           </p>
           <div className="flex justify-end gap-2 mt-4">
-            <Button variant="outline" onClick={() => setDeletePackage(null)}>
-              Cancel
-            </Button>
-            <Button variant="destructive" onClick={handleDelete}>
-              Delete
-            </Button>
+            <Button variant="outline" onClick={() => setDeletePkg(null)}>Cancel</Button>
+            <Button variant="destructive" onClick={handleDelete}>Delete</Button>
           </div>
         </DialogContent>
       </Dialog>
@@ -645,6 +651,7 @@ function ShipmentsPage({ limit }: { limit?: number }) {
   );
 }
 
+// ================= CREATE SHIPMENT =================
 function CreateShipmentPage() {
   const navigate = useNavigate();
 
@@ -661,15 +668,17 @@ function CreateShipmentPage() {
       </div>
       <Card>
         <CardContent className="pt-6">
-          <PackageForm onSubmit={handleSubmit} isLoading={false} />
+          <PackageForm onSubmit={handleSubmit} />
         </CardContent>
       </Card>
     </div>
   );
 }
 
+// ================= LEADERBOARD =================
 function LeaderboardPage() {
   const [leaderboard, setLeaderboard] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     async function load() {
@@ -677,7 +686,9 @@ function LeaderboardPage() {
         const data = await packageService.getLeaderboard();
         setLeaderboard(data);
       } catch (err) {
-        console.error("Failed to load leaderboard:", err);
+        console.error("Leaderboard load error:", err);
+      } finally {
+        setLoading(false);
       }
     }
     load();
@@ -698,7 +709,12 @@ function LeaderboardPage() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          {leaderboard && leaderboard.length > 0 ? (
+          {loading ? (
+            <div className="text-center py-8">
+              <Loader2 className="h-8 w-8 text-blue-700 animate-spin mx-auto mb-2" />
+              <p className="text-slate-500">Loading leaderboard...</p>
+            </div>
+          ) : leaderboard.length > 0 ? (
             <div className="space-y-3">
               {leaderboard.map((entry, index) => {
                 const carrier = CARRIER_AVATARS.find((f) => f.id === entry.fishAvatar) || CARRIER_AVATARS[0];
@@ -709,13 +725,11 @@ function LeaderboardPage() {
                     <span className="text-3xl">{carrier.emoji}</span>
                     <div className="flex-1">
                       <p className="font-semibold text-slate-900">{carrier.name}</p>
-                      <p className="text-sm text-slate-500">{entry.count} deliveries completed</p>
+                      <p className="text-sm text-slate-500">{entry.count} deliveries</p>
                     </div>
                     <div className="text-right">
-                      <p className="text-lg font-bold text-blue-700">
-                        {entry.avgTime?.toFixed(1) || "0"}h
-                      </p>
-                      <p className="text-xs text-slate-500">avg delivery time</p>
+                      <p className="text-lg font-bold text-blue-700">{entry.avgTime?.toFixed(1) || "0"}h</p>
+                      <p className="text-xs text-slate-500">avg delivery</p>
                     </div>
                   </div>
                 );
@@ -724,7 +738,7 @@ function LeaderboardPage() {
           ) : (
             <div className="text-center py-8 text-slate-500">
               <Trophy className="h-12 w-12 mx-auto mb-3 text-slate-300" />
-              <p>No delivered packages yet. Complete some deliveries to see the fastest carriers!</p>
+              <p>No delivered packages yet.</p>
             </div>
           )}
         </CardContent>
@@ -733,6 +747,7 @@ function LeaderboardPage() {
   );
 }
 
+// ================= SETTINGS =================
 function SettingsPage() {
   return (
     <div className="space-y-6">
@@ -742,35 +757,19 @@ function SettingsPage() {
       </div>
 
       <Card>
-        <CardHeader>
-          <CardTitle>Application Information</CardTitle>
-        </CardHeader>
+        <CardHeader><CardTitle>Application Information</CardTitle></CardHeader>
         <CardContent className="space-y-4">
           <div className="grid grid-cols-2 gap-4 text-sm">
-            <div>
-              <p className="text-slate-500">App Name</p>
-              <p className="font-medium text-slate-900">TitanRoute</p>
-            </div>
-            <div>
-              <p className="text-slate-500">Version</p>
-              <p className="font-medium text-slate-900">1.0.0</p>
-            </div>
-            <div>
-              <p className="text-slate-500">Backend</p>
-              <p className="font-medium text-slate-900">Supabase (or localStorage fallback)</p>
-            </div>
-            <div>
-              <p className="text-slate-500">Theme</p>
-              <p className="font-medium text-slate-900">Corporate Blue</p>
-            </div>
+            <div><p className="text-slate-500">App Name</p><p className="font-medium text-slate-900">TitanRoute</p></div>
+            <div><p className="text-slate-500">Version</p><p className="font-medium text-slate-900">1.0.0</p></div>
+            <div><p className="text-slate-500">Backend</p><p className="font-medium text-slate-900">Supabase (or localStorage fallback)</p></div>
+            <div><p className="text-slate-500">Theme</p><p className="font-medium text-slate-900">Corporate Blue</p></div>
           </div>
         </CardContent>
       </Card>
 
       <Card>
-        <CardHeader>
-          <CardTitle>Environment</CardTitle>
-        </CardHeader>
+        <CardHeader><CardTitle>Environment</CardTitle></CardHeader>
         <CardContent>
           <div className="space-y-2 text-sm">
             <div className="flex justify-between">
@@ -781,9 +780,7 @@ function SettingsPage() {
             </div>
             <div className="flex justify-between">
               <span className="text-slate-500">Admin Email</span>
-              <span className="font-mono text-slate-900">
-                {import.meta.env.VITE_ADMIN_EMAIL || "admin@titanroute.com"}
-              </span>
+              <span className="font-mono text-slate-900">{import.meta.env.VITE_ADMIN_EMAIL || "admin@titanroute.com"}</span>
             </div>
           </div>
         </CardContent>
@@ -792,16 +789,8 @@ function SettingsPage() {
   );
 }
 
-// Reusable Package Form
-function PackageForm({
-  initialData,
-  onSubmit,
-  isLoading,
-}: {
-  initialData?: Package;
-  onSubmit: (data: any) => void;
-  isLoading: boolean;
-}) {
+// ================= FORMS =================
+function PackageForm({ initialData, onSubmit }: { initialData?: Package; onSubmit: (data: any) => void }) {
   const [formData, setFormData] = useState({
     senderName: initialData?.senderName || "",
     recipientName: initialData?.recipientName || "",
@@ -815,10 +804,7 @@ function PackageForm({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onSubmit({
-      ...formData,
-      weight: parseFloat(formData.weight) || 0,
-    });
+    onSubmit({ ...formData, weight: parseFloat(formData.weight) || 0 });
   };
 
   return (
@@ -826,126 +812,72 @@ function PackageForm({
       <div className="grid grid-cols-2 gap-3">
         <div>
           <label className="text-sm font-medium text-slate-700">Sender Name</label>
-          <Input
-            value={formData.senderName}
-            onChange={(e) => setFormData({ ...formData, senderName: e.target.value })}
-            required
-          />
+          <Input value={formData.senderName} onChange={(e) => setFormData({ ...formData, senderName: e.target.value })} required />
         </div>
         <div>
           <label className="text-sm font-medium text-slate-700">Recipient Name</label>
-          <Input
-            value={formData.recipientName}
-            onChange={(e) => setFormData({ ...formData, recipientName: e.target.value })}
-            required
-          />
+          <Input value={formData.recipientName} onChange={(e) => setFormData({ ...formData, recipientName: e.target.value })} required />
         </div>
       </div>
       <div>
         <label className="text-sm font-medium text-slate-700">Address</label>
-        <Input
-          value={formData.address}
-          onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-          required
-        />
+        <Input value={formData.address} onChange={(e) => setFormData({ ...formData, address: e.target.value })} required />
       </div>
       <div className="grid grid-cols-2 gap-3">
         <div>
           <label className="text-sm font-medium text-slate-700">Phone</label>
-          <Input
-            value={formData.phone}
-            onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-            required
-          />
+          <Input value={formData.phone} onChange={(e) => setFormData({ ...formData, phone: e.target.value })} required />
         </div>
         <div>
           <label className="text-sm font-medium text-slate-700">Weight (kg)</label>
-          <Input
-            type="number"
-            step="0.01"
-            value={formData.weight}
-            onChange={(e) => setFormData({ ...formData, weight: e.target.value })}
-            required
-          />
+          <Input type="number" step="0.01" value={formData.weight} onChange={(e) => setFormData({ ...formData, weight: e.target.value })} required />
         </div>
       </div>
       <div>
         <label className="text-sm font-medium text-slate-700">Description</label>
-        <Input
-          value={formData.description}
-          onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-        />
+        <Input value={formData.description} onChange={(e) => setFormData({ ...formData, description: e.target.value })} />
       </div>
       <div>
         <label className="text-sm font-medium text-slate-700">Notes</label>
-        <Input
-          value={formData.notes}
-          onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-        />
+        <Input value={formData.notes} onChange={(e) => setFormData({ ...formData, notes: e.target.value })} />
       </div>
       <div>
         <label className="text-sm font-medium text-slate-700">Assigned Carrier</label>
-        <Select
-          value={formData.fishAvatar}
-          onValueChange={(v) => setFormData({ ...formData, fishAvatar: v })}
-        >
-          <SelectTrigger>
-            <SelectValue />
-          </SelectTrigger>
+        <Select value={formData.fishAvatar} onValueChange={(v) => setFormData({ ...formData, fishAvatar: v })}>
+          <SelectTrigger><SelectValue /></SelectTrigger>
           <SelectContent>
-            {CARRIER_AVATARS.map((carrier) => (
-              <SelectItem key={carrier.id} value={carrier.id}>
-                <span className="flex items-center gap-2">
-                  <span>{carrier.emoji}</span>
-                  {carrier.name}
-                </span>
+            {CARRIER_AVATARS.map((c) => (
+              <SelectItem key={c.id} value={c.id}>
+                <span className="flex items-center gap-2"><span>{c.emoji}</span>{c.name}</span>
               </SelectItem>
             ))}
           </SelectContent>
         </Select>
       </div>
-      <div className="pt-2 flex justify-end gap-2">
-        <Button type="submit" className="bg-blue-700 hover:bg-blue-800" disabled={isLoading}>
-          {isLoading ? "Saving..." : initialData ? "Update Package" : "Create Package"}
+      <div className="pt-2 flex justify-end">
+        <Button type="submit" className="bg-blue-700 hover:bg-blue-800">
+          {initialData ? "Update Package" : "Create Package"}
         </Button>
       </div>
     </form>
   );
 }
 
-function StatusForm({
-  packageId,
-  currentStatus,
-  onSubmit,
-  isLoading,
-  onCancel,
-}: {
-  packageId: string;
-  currentStatus: string;
-  onSubmit: (data: { id: string; status: "sent" | "received" | "delivered" | "canceled" | "held_by_customs"; reason?: string }) => void;
-  isLoading: boolean;
-  onCancel: () => void;
-}) {
-  const [status, setStatus] = useState<"sent" | "received" | "delivered" | "canceled" | "held_by_customs">(currentStatus as any);
+function StatusForm({ currentStatus, onSubmit, onCancel }: { currentStatus: string; onSubmit: (data: any) => void; onCancel: () => void }) {
+  const [status, setStatus] = useState<any>(currentStatus);
   const [reason, setReason] = useState("");
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onSubmit({
-      id: packageId,
-      status,
-      reason: status === "held_by_customs" ? reason : undefined,
-    });
+    onSubmit({ status, reason: status === "held_by_customs" ? reason : undefined });
   };
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       <div>
         <label className="text-sm font-medium text-slate-700">New Status</label>
-        <Select value={status} onValueChange={(v) => setStatus(v as any)}>
-          <SelectTrigger>
-            <SelectValue />
-          </SelectTrigger>
+        <Select value={status} onValueChange={(v) => setStatus(v)}>
+          <SelectTrigger><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="sent">Sent</SelectItem>
             <SelectItem value="received">Received</SelectItem>
@@ -958,22 +890,14 @@ function StatusForm({
       {status === "held_by_customs" && (
         <div>
           <label className="text-sm font-medium text-slate-700">Reason</label>
-          <Input
-            placeholder="e.g., Missing invoice"
-            value={reason}
-            onChange={(e) => setReason(e.target.value)}
-            required={status === "held_by_customs"}
-          />
+          <Input placeholder="e.g., Missing invoice" value={reason} onChange={(e) => setReason(e.target.value)} required />
         </div>
       )}
       <div className="flex justify-end gap-2 pt-2">
         <Button type="button" variant="outline" onClick={onCancel}>
-          <X className="h-4 w-4 mr-1" />
-          Cancel
+          <X className="h-4 w-4 mr-1" /> Cancel
         </Button>
-        <Button type="submit" className="bg-blue-700 hover:bg-blue-800" disabled={isLoading}>
-          {isLoading ? "Updating..." : "Update Status"}
-        </Button>
+        <Button type="submit" className="bg-blue-700 hover:bg-blue-800">Update Status</Button>
       </div>
     </form>
   );
