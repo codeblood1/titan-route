@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Link, useLocation, useNavigate } from "react-router";
-import { Truck, Menu, X, Shield } from "lucide-react";
+import { Truck, Menu, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 export default function Header() {
@@ -76,15 +76,6 @@ export default function Header() {
           {/* Actions */}
           <div className="flex items-center gap-2">
             <Button
-              variant="ghost"
-              size="sm"
-              className={`hidden sm:flex text-sm ${scrolled ? "text-slate-600 hover:text-blue-700" : "text-white/80 hover:text-white hover:bg-white/10"}`}
-              onClick={() => navigate("/admin")}
-            >
-              <Shield className="h-4 w-4 mr-1.5" />
-              Admin
-            </Button>
-            <Button
               size="sm"
               className={`text-sm ${scrolled ? "bg-blue-700 hover:bg-blue-800 text-white" : "bg-white/20 hover:bg-white/30 text-white backdrop-blur"}`}
               onClick={() => navigate("/contact")}
@@ -124,16 +115,6 @@ export default function Header() {
                 {item.label}
               </Link>
             ))}
-            <hr className="my-3 border-slate-100" />
-            <Button
-              variant="ghost"
-              size="sm"
-              className="justify-start text-slate-600"
-              onClick={() => { setMobileOpen(false); navigate("/admin"); }}
-            >
-              <Shield className="h-4 w-4 mr-2" />
-              Admin Panel
-            </Button>
           </div>
         </div>
       )}
