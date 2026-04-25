@@ -33,12 +33,64 @@ export interface LeaderboardEntry {
   avgTime: number | null;
 }
 
-// Supabase client setup
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string | undefined;
-const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
+// Runtime configuration helpers
+const LS_SUPABASE_URL = "titanroute_supabase_url";
+const LS_SUPABASE_KEY = "titanroute_supabase_key";
 
-export const supabase: SupabaseClient | null =
-  supabaseUrl && supabaseKey ? createClient(supabaseUrl, supabaseKey) : null;
+function getRuntimeSupabaseUrl(): string | null {
+  try {
+    return localStorage.getItem(LS_SUPABASE_URL) || null;
+  } catch { return null; }
+}
+
+function getRuntimeSupabaseKey(): string | null {
+  try {
+    return localStorage.getItem(LS_SUPABASE_KEY) || null;
+  } catch { return null; }
+}
+
+export function saveRuntimeSupabaseConfig(url: string, key: string) {
+  try {
+    localStorage.setItem(LS_SUPABASE_URL, url.trim());
+    localStorage.setItem(LS_SUPABASE_KEY, key.trim());
+  } catch (e) {
+    console.error("[supabase.ts] Failed to save runtime config:", e);
+  }
+}
+
+export function clearRuntimeSupabaseConfig() {
+  try {
+    localStorage.removeItem(LS_SUPABASE_URL);
+    localStorage.removeItem(LS_SUPABASE_KEY);
+  } catch (e) {
+    console.error("[supabase.ts] Failed to clear runtime config:", e);
+  }
+}
+
+export function hasRuntimeSupabaseConfig(): boolean {
+  return !!getRuntimeSupabaseUrl() && !!getRuntimeSupabaseKey();
+}
+
+// Supabase client setup — checks .env first, then localStorage runtime config
+function createSupabaseClient(): SupabaseClient | null {
+  const envUrl = import.meta.env.VITE_SUPABASE_URL as string | undefined;
+  const envKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
+
+  const url = envUrl || getRuntimeSupabaseUrl();
+  const key = envKey || getRuntimeSupabaseKey();
+
+  if (!url || !key) return null;
+  if (url.includes("your-project") || key.includes("your-anon-key")) return null;
+
+  try {
+    return createClient(url, key);
+  } catch (e) {
+    console.error("[supabase.ts] Failed to create Supabase client:", e);
+    return null;
+  }
+}
+
+export const supabase: SupabaseClient | null = createSupabaseClient();
 
 export const USE_LOCAL = !supabase;
 
