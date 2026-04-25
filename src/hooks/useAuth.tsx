@@ -8,37 +8,45 @@ interface AdminUser {
   role: string;
 }
 
+interface LoginResult {
+  success: boolean;
+  reason?: string;
+  debug?: string;
+}
+
 interface AuthContextValue {
   user: AdminUser | null;
   isAuthenticated: boolean;
   isLoading: boolean;
-  login: (email: string, password: string) => Promise<boolean>;
+  login: (email: string, password: string) => Promise<LoginResult>;
   logout: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
-// Demo fallback credentials — used ONLY when Supabase is NOT configured
 const DEMO_EMAIL = "admin@titanroute.com";
 const DEMO_PASS = "admin123";
 const LS_KEY = "tr_admin_v3";
 
-// Check if Supabase client is actually initialized (URL + key provided)
 const HAS_SUPABASE = !!supabase;
 
 console.log("[Auth] Mode:", HAS_SUPABASE ? "SUPABASE" : "DEMO (fallback)");
+if (HAS_SUPABASE) {
+  console.log("[Auth] Supabase URL:", (supabase as any)?.supabaseUrl || "unknown");
+}
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AdminUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  // On mount: check for existing session
   useEffect(() => {
     async function checkSession() {
       if (HAS_SUPABASE) {
         try {
           const { data: { session } } = await supabase!.auth.getSession();
+          console.log("[Auth] Existing session:", session ? "YES" : "NO");
           if (session?.user) {
+            console.log("[Auth] Session user_id:", session.user.id);
             const adminUser = await loadSupabaseUser(session.user.id, session.user.email ?? "");
             if (adminUser) {
               setUser(adminUser);
@@ -51,14 +59,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
       }
 
-      // Fallback: check localStorage demo session
       try {
         const raw = localStorage.getItem(LS_KEY);
         if (raw) {
           const parsed = JSON.parse(raw);
-          if (parsed?.email) {
-            setUser(parsed);
-          }
+          if (parsed?.email) setUser(parsed);
         }
       } catch {
         localStorage.removeItem(LS_KEY);
@@ -68,10 +73,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     checkSession();
 
-    // Listen for Supabase auth state changes (works across tabs)
     let subscription: { unsubscribe: () => void } | null = null;
     if (HAS_SUPABASE) {
       const { data } = supabase!.auth.onAuthStateChange(async (event, session) => {
+        console.log("[Auth] Auth state change:", event, session?.user?.id);
         if (event === "SIGNED_IN" && session?.user) {
           const adminUser = await loadSupabaseUser(session.user.id, session.user.email ?? "");
           if (adminUser) setUser(adminUser);
@@ -83,109 +88,117 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       subscription = data.subscription;
     }
 
-    return () => {
-      subscription?.unsubscribe();
-    };
+    return () => subscription?.unsubscribe();
   }, []);
 
-  // Load admin role from Supabase admin_roles table
   async function loadSupabaseUser(userId: string, email: string): Promise<AdminUser | null> {
     if (!HAS_SUPABASE) return null;
     try {
+      console.log("[Auth] Looking up admin_roles for user_id:", userId);
+
+      // First, try WITHOUT is_active filter to see if row exists at all
+      const { data: anyRoleData, error: anyRoleError } = await supabase!
+        .from("admin_roles")
+        .select("role, full_name, is_active, user_id")
+        .eq("user_id", userId);
+
+      console.log("[Auth] admin_roles ALL rows for this user:", { count: anyRoleData?.length ?? 0, rows: anyRoleData, error: anyRoleError?.message || null });
+
+      // Now try the strict query
       const { data: roleData, error } = await supabase!
         .from("admin_roles")
-        .select("role, full_name")
+        .select("role, full_name, is_active, user_id")
         .eq("user_id", userId)
         .eq("is_active", true)
-        .single();
+        .maybeSingle();
 
-      if (error || !roleData) {
-        console.warn("[Auth] User has no admin role in admin_roles table:", error?.message);
+      console.log("[Auth] admin_roles strict query result:", { roleData, error: error?.message || null });
+
+      if (error) {
+        console.error("[Auth] admin_roles query ERROR:", error.message, error.code, error.details);
         return null;
       }
 
+      if (!roleData) {
+        console.warn("[Auth] No ACTIVE row in admin_roles for user_id:", userId);
+        if (anyRoleData && anyRoleData.length > 0) {
+          console.warn("[Auth] BUT found", anyRoleData.length, "inactive row(s). Check is_active flag.");
+          console.warn("[Auth] FIX SQL: UPDATE admin_roles SET is_active = true WHERE user_id = '" + userId + "';");
+        } else {
+          console.warn("[Auth] HINT: Run this SQL to fix:");
+          console.warn(`INSERT INTO admin_roles (user_id, role, full_name, is_active) VALUES ('${userId}', 'admin', 'Admin', true);`);
+        }
+        return null;
+      }
+
+      console.log("[Auth] Found admin role:", roleData.role, "for", email);
       return {
         id: userId,
         email: email.toLowerCase(),
         name: roleData.full_name || email.split("@")[0] || "Admin",
         role: roleData.role,
       };
-    } catch (err) {
-      console.error("[Auth] Error loading admin role:", err);
+    } catch (err: any) {
+      console.error("[Auth] Exception in loadSupabaseUser:", err?.message || err);
       return null;
     }
   }
 
-  const login = useCallback(async (email: string, password: string): Promise<boolean> => {
+  const login = useCallback(async (email: string, password: string): Promise<LoginResult> => {
     const trimmedEmail = email.trim().toLowerCase();
     const trimmedPassword = password.trim();
 
-    // ===== SUPABASE MODE =====
     if (HAS_SUPABASE) {
       try {
-        console.log("[Auth] Trying Supabase login for:", trimmedEmail);
+        console.log("[Auth] Supabase signInWithPassword:", trimmedEmail);
         const { data, error } = await supabase!.auth.signInWithPassword({
           email: trimmedEmail,
           password: trimmedPassword,
         });
 
+        console.log("[Auth] signInWithPassword result:", { userId: data?.user?.id, hasSession: !!data?.session, error: error?.message || null });
+
         if (error || !data.user) {
-          console.warn("[Auth] Supabase auth failed:", error?.message);
-          return false;
+          console.warn("[Auth] signInWithPassword failed:", error?.message);
+          return { success: false, reason: "wrong_password", debug: error?.message || "No user returned" };
         }
 
-        console.log("[Auth] Supabase auth OK, checking admin_roles...");
+        console.log("[Auth] signInWithPassword OK. user.id:", data.user.id);
         const adminUser = await loadSupabaseUser(data.user.id, data.user.email ?? trimmedEmail);
+
         if (adminUser) {
-          console.log("[Auth] Admin confirmed:", adminUser.email, "role:", adminUser.role);
           setUser(adminUser);
-          return true;
+          return { success: true };
         }
 
-        // Authenticated but not an admin — sign out
-        console.warn("[Auth] User authenticated but NO admin role in admin_roles table");
         await supabase!.auth.signOut();
-        return false;
-      } catch (err) {
-        console.error("[Auth] Supabase login error:", err);
-        return false;
+        return { success: false, reason: "no_admin_role", debug: `User ${data.user.id} has no active admin_roles row` };
+      } catch (err: any) {
+        console.error("[Auth] Supabase login exception:", err?.message || err);
+        return { success: false, reason: "supabase_error", debug: err?.message || String(err) };
       }
     }
 
-    // ===== DEMO FALLBACK MODE =====
+    // Demo mode
     if (trimmedEmail === DEMO_EMAIL.toLowerCase() && trimmedPassword === DEMO_PASS) {
-      const adminUser: AdminUser = {
-        id: "admin-1",
-        email: DEMO_EMAIL,
-        name: "Administrator",
-        role: "admin",
-      };
+      const adminUser: AdminUser = { id: "admin-1", email: DEMO_EMAIL, name: "Administrator", role: "admin" };
       setUser(adminUser);
       localStorage.setItem(LS_KEY, JSON.stringify(adminUser));
-      return true;
+      return { success: true };
     }
 
-    return false;
+    return { success: false, reason: "wrong_password", debug: "Demo mode: use admin@titanroute.com / admin123" };
   }, []);
 
   const logout = useCallback(async () => {
-    if (HAS_SUPABASE) {
-      await supabase!.auth.signOut();
-    }
+    if (HAS_SUPABASE) await supabase!.auth.signOut();
     setUser(null);
     localStorage.removeItem(LS_KEY);
   }, []);
 
-  const value = useMemo(
-    () => ({
-      user,
-      isAuthenticated: !!user,
-      isLoading,
-      login,
-      logout,
-    }),
-    [user, isLoading, login, logout]
-  );
+  const value = useMemo(() => ({
+    user, isAuthenticated: !!user, isLoading, login, logout,
+  }), [user, isLoading, login, logout]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

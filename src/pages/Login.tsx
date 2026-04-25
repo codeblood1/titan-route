@@ -2,51 +2,167 @@ import { useState } from "react";
 import { useNavigate } from "react-router";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase, saveRuntimeSupabaseConfig, clearRuntimeSupabaseConfig, hasRuntimeSupabaseConfig } from "@/lib/supabase";
-import { Truck, Shield, ArrowLeft, AlertCircle, Settings, Database, Trash2 } from "lucide-react";
+import { Truck, Shield, ArrowLeft, AlertCircle, Settings, Database, Trash2, Activity, TestTube } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+
+interface TestResult {
+  name: string;
+  status: "pass" | "fail" | "running" | "idle";
+  detail: string;
+}
 
 export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [rawReason, setRawReason] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [showConfig, setShowConfig] = useState(false);
   const [sbUrl, setSbUrl] = useState("");
   const [sbKey, setSbKey] = useState("");
   const [configSaved, setConfigSaved] = useState(false);
+  const [showDiagnostics, setShowDiagnostics] = useState(false);
+  const [tests, setTests] = useState<TestResult[]>([
+    { name: "Supabase Client", status: "idle", detail: "" },
+    { name: "Auth Sign-In", status: "idle", detail: "" },
+    { name: "Read admin_roles", status: "idle", detail: "" },
+    { name: "Read packages", status: "idle", detail: "" },
+  ]);
   const { login } = useAuth();
   const navigate = useNavigate();
 
   const hasSupabase = !!supabase;
   const hasStoredConfig = hasRuntimeSupabaseConfig();
 
+  const updateTest = (name: string, status: TestResult["status"], detail: string) => {
+    setTests((prev) => prev.map((t) => (t.name === name ? { ...t, status, detail } : t)));
+  };
+
+  const runDiagnostics = async () => {
+    if (!supabase) {
+      setError("Supabase is not connected. Configure it first.");
+      return;
+    }
+
+    setShowDiagnostics(true);
+    setTests([
+      { name: "Supabase Client", status: "running", detail: "Checking..." },
+      { name: "Auth Sign-In", status: "idle", detail: "" },
+      { name: "Read admin_roles", status: "idle", detail: "" },
+      { name: "Read packages", status: "idle", detail: "" },
+    ]);
+
+    // Test 1: Client connection
+    try {
+      const { data, error } = await supabase.from("packages").select("count").limit(0);
+      if (error) {
+        updateTest("Supabase Client", "fail", `Connection error: ${error.message} (${error.code})`);
+      } else {
+        updateTest("Supabase Client", "pass", "Connected to Supabase successfully");
+      }
+    } catch (e: any) {
+      updateTest("Supabase Client", "fail", `Exception: ${e.message}`);
+    }
+
+    // Test 2: Auth with provided credentials
+    if (email && password) {
+      updateTest("Auth Sign-In", "running", `Trying ${email}...`);
+      try {
+        const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+        if (error || !data.user) {
+          updateTest("Auth Sign-In", "fail", `Failed: ${error?.message || "No user"}`);
+        } else {
+          updateTest("Auth Sign-In", "pass", `Signed in as ${data.user.id}`);
+
+          // Test 3: Read admin_roles for this user
+          updateTest("Read admin_roles", "running", "Querying...");
+          const userId = data.user.id;
+          try {
+            const { data: roleRows, error: roleError } = await supabase
+              .from("admin_roles")
+              .select("role, full_name, is_active, user_id")
+              .eq("user_id", userId);
+
+            if (roleError) {
+              updateTest("Read admin_roles", "fail", `Query error: ${roleError.message}`);
+            } else if (!roleRows || roleRows.length === 0) {
+              updateTest(
+                "Read admin_roles",
+                "fail",
+                `No rows found for user_id ${userId}. You MUST run: INSERT INTO admin_roles (user_id, role, full_name, is_active) VALUES ('${userId}', 'admin', 'Admin', true);`
+              );
+            } else {
+              const active = roleRows.find((r: any) => r.is_active === true);
+              if (active) {
+                updateTest("Read admin_roles", "pass", `Found active role: ${active.role}`);
+              } else {
+                updateTest(
+                  "Read admin_roles",
+                  "fail",
+                  `Found ${roleRows.length} row(s) but none are active (is_active=false). Run: UPDATE admin_roles SET is_active = true WHERE user_id = '${userId}';`
+                );
+              }
+            }
+          } catch (e: any) {
+            updateTest("Read admin_roles", "fail", `Exception: ${e.message}`);
+          }
+
+          // Test 4: Read packages
+          updateTest("Read packages", "running", "Querying...");
+          try {
+            const { data: pkgData, error: pkgError } = await supabase.from("packages").select("tracking_code").limit(1);
+            if (pkgError) {
+              updateTest("Read packages", "fail", `Query error: ${pkgError.message}`);
+            } else {
+              updateTest("Read packages", "pass", `Found ${pkgData?.length ?? 0} package(s)`);
+            }
+          } catch (e: any) {
+            updateTest("Read packages", "fail", `Exception: ${e.message}`);
+          }
+
+          // Sign out after diagnostics
+          await supabase.auth.signOut();
+        }
+      } catch (e: any) {
+        updateTest("Auth Sign-In", "fail", `Exception: ${e.message}`);
+      }
+    } else {
+      updateTest("Auth Sign-In", "fail", "Enter email and password above first");
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
+    setRawReason("");
     setIsLoading(true);
 
     const result = await login(email, password);
     setIsLoading(false);
+
+    console.log("[Login] Result:", result);
 
     if (result.success) {
       navigate("/admin");
       return;
     }
 
+    setRawReason(result.reason || "unknown");
+
     if (result.reason === "wrong_password") {
-      setError("Invalid email or password.");
+      setError(`Invalid email or password. (code: ${result.reason})`);
     } else if (result.reason === "no_admin_role") {
       setError(
-        "Login succeeded, but this account does not have admin privileges. " +
+        `Login succeeded, but this account does not have admin privileges. (code: ${result.reason}) ` +
         "Please assign an admin role in the admin_roles table. " +
-        "Open browser DevTools (F12) → Console for the exact SQL fix."
+        "Click 'Run Diagnostics' below for the exact SQL fix."
       );
     } else if (result.reason === "supabase_error") {
-      setError("Supabase connection error. Please check your internet connection and Supabase configuration.");
+      setError(`Supabase connection error: ${result.debug || ""} (code: ${result.reason})`);
     } else {
-      setError("Invalid email or password, or this account does not have admin privileges.");
+      setError(`Unknown error: ${result.debug || result.reason || "no details"} (code: ${result.reason || "unknown"})`);
     }
   };
 
@@ -65,7 +181,7 @@ export default function Login() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-blue-900 flex items-center justify-center px-4 py-8">
-      <div className="w-full max-w-md">
+      <div className="w-full max-w-lg">
         <div className="text-center mb-8">
           <div className="w-16 h-16 rounded-xl bg-blue-700 flex items-center justify-center mx-auto mb-4">
             <Truck className="h-8 w-8 text-white" />
@@ -146,6 +262,78 @@ export default function Login() {
                 {isLoading ? "Signing in..." : "Sign In"}
               </Button>
             </form>
+
+            {/* Diagnostics Panel */}
+            {hasSupabase && (
+              <div className="mt-4 pt-4 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setShowDiagnostics((s) => !s)}
+                  className="flex items-center gap-2 text-xs text-slate-500 hover:text-blue-700 transition-colors w-full justify-center"
+                >
+                  <Activity className="h-3.5 w-3.5" />
+                  {showDiagnostics ? "Hide Diagnostics" : "Show Diagnostics & SQL Fix"}
+                </button>
+
+                {showDiagnostics && (
+                  <div className="mt-3 space-y-3">
+                    <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-xs font-semibold text-slate-700 flex items-center gap-1">
+                          <TestTube className="h-3.5 w-3.5" />
+                          Connection Tests
+                        </span>
+                        <Button size="sm" className="h-7 text-xs bg-blue-700 hover:bg-blue-800" onClick={runDiagnostics}>
+                          Run Diagnostics
+                        </Button>
+                      </div>
+
+                      <div className="space-y-2">
+                        {tests.map((test) => (
+                          <div key={test.name} className="flex items-start gap-2 text-xs">
+                            <span
+                              className={`mt-0.5 h-2 w-2 rounded-full shrink-0 ${
+                                test.status === "pass"
+                                  ? "bg-emerald-500"
+                                  : test.status === "fail"
+                                  ? "bg-red-500"
+                                  : test.status === "running"
+                                  ? "bg-amber-400 animate-pulse"
+                                  : "bg-slate-300"
+                              }`}
+                            />
+                            <div className="flex-1 min-w-0">
+                              <span className="font-medium text-slate-700">{test.name}</span>
+                              {test.detail && (
+                                <p className="text-slate-500 mt-0.5 break-words">{test.detail}</p>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {rawReason === "no_admin_role" && email && (
+                      <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-800 space-y-2">
+                        <p className="font-semibold">SQL Fix - Copy and run in Supabase SQL Editor:</p>
+                        <p>First find your user ID:</p>
+                        <code className="block bg-white border border-amber-300 rounded px-2 py-1 font-mono text-[10px] break-all">
+                          SELECT id, email FROM auth.users WHERE email = &apos;{email}&apos;;
+                        </code>
+                        <p>Then insert admin role (replace USER_ID):</p>
+                        <code className="block bg-white border border-amber-300 rounded px-2 py-1 font-mono text-[10px] break-all">
+                          INSERT INTO admin_roles (user_id, role, full_name, is_active) VALUES (&apos;USER_ID_HERE&apos;, &apos;admin&apos;, &apos;Admin&apos;, true);
+                        </code>
+                        <p>Or update if already exists:</p>
+                        <code className="block bg-white border border-amber-300 rounded px-2 py-1 font-mono text-[10px] break-all">
+                          UPDATE admin_roles SET is_active = true, role = &apos;admin&apos; WHERE user_id = (SELECT id FROM auth.users WHERE email = &apos;{email}&apos;);
+                        </code>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Supabase Configuration Panel */}
             <div className="mt-4 pt-4 border-t border-slate-100">
