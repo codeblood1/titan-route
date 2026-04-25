@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { useNavigate } from "react-router";
 import { useAuth } from "@/hooks/useAuth";
-import { Truck, Shield, ArrowLeft } from "lucide-react";
+import { supabase } from "@/lib/supabase";
+import { Truck, Shield, ArrowLeft, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -14,19 +15,24 @@ export default function Login() {
   const { login } = useAuth();
   const navigate = useNavigate();
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const hasSupabase = !!supabase;
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
     setIsLoading(true);
 
-    const success = login(email, password);
-
+    const success = await login(email, password);
     setIsLoading(false);
 
     if (success) {
       navigate("/admin");
     } else {
-      setError("Invalid email or password.");
+      setError(
+        hasSupabase
+          ? "Invalid credentials, or this account does not have admin privileges."
+          : "Invalid email or password."
+      );
     }
   };
 
@@ -49,6 +55,16 @@ export default function Login() {
             </CardTitle>
           </CardHeader>
           <CardContent>
+            {!hasSupabase && (
+              <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-lg flex items-start gap-2">
+                <AlertCircle className="h-4 w-4 text-amber-600 mt-0.5 shrink-0" />
+                <div className="text-xs text-amber-700">
+                  <p className="font-semibold">Demo Mode Active</p>
+                  <p>Supabase is not configured. Add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to your .env file to use real Supabase auth.</p>
+                </div>
+              </div>
+            )}
+
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
                 <label className="text-sm font-medium text-slate-700 mb-1 block">Email</label>
@@ -99,7 +115,9 @@ export default function Login() {
         </Card>
 
         <p className="text-center text-xs text-blue-300/60 mt-6">
-          Default: admin@titanroute.com / admin123
+          {hasSupabase
+            ? "Connected to Supabase authentication"
+            : "Demo credentials: admin@titanroute.com / admin123"}
         </p>
       </div>
     </div>
