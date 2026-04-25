@@ -1,8 +1,8 @@
 import { useState, useEffect, type ReactNode } from "react";
 import { useNavigate, useLocation } from "react-router";
 import { useAuth } from "@/hooks/useAuth";
-import { useErrorBoundary } from "@/hooks/useErrorBoundary";
 import { packageService, type Package } from "@/lib/supabase";
+import ErrorBoundary from "@/components/ErrorBoundary";
 import {
   LayoutDashboard,
   Package,
@@ -23,7 +23,6 @@ import {
   Loader2,
   AlertCircle,
   CheckCircle2,
-  RefreshCw,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -65,10 +64,19 @@ const sidebarItems = [
 
 // ================= MAIN COMPONENT =================
 export default function AdminDashboard() {
+  return (
+    <ErrorBoundary>
+      <AdminDashboardInner />
+    </ErrorBoundary>
+  );
+}
+
+function AdminDashboardInner() {
   const { user, isAuthenticated, logout, isLoading } = useAuth();
-  const { hasError, error, reset } = useErrorBoundary();
   const navigate = useNavigate();
   const location = useLocation();
+
+  console.log("[AdminDashboard] render - isLoading:", isLoading, "isAuthenticated:", isAuthenticated, "user:", user?.email);
 
   // Show spinner while auth initializes
   if (isLoading) {
@@ -84,6 +92,7 @@ export default function AdminDashboard() {
 
   // Not logged in
   if (!isAuthenticated) {
+    console.log("[AdminDashboard] Not authenticated, showing access required");
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center px-4">
         <Card className="w-full max-w-md text-center p-8 shadow-xl">
@@ -103,44 +112,21 @@ export default function AdminDashboard() {
     );
   }
 
-  // Caught a runtime error
-  if (hasError) {
-    return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center px-4">
-        <Card className="w-full max-w-lg text-center p-8 shadow-xl">
-          <div className="w-16 h-16 bg-red-50 rounded-full flex items-center justify-center mx-auto mb-4">
-            <AlertCircle className="h-8 w-8 text-red-500" />
-          </div>
-          <h2 className="text-2xl font-bold text-slate-900 mb-2">Something Went Wrong</h2>
-          <p className="text-slate-500 mb-4 text-sm">{error?.message || "An unexpected error occurred."}</p>
-          <div className="flex justify-center gap-2">
-            <Button onClick={reset} variant="outline">
-              <RefreshCw className="h-4 w-4 mr-1" />
-              Try Again
-            </Button>
-            <Button onClick={() => { logout(); navigate("/login"); }} className="bg-blue-700">
-              Back to Login
-            </Button>
-          </div>
-        </Card>
-      </div>
-    );
-  }
-
   // Safe content render
   const path = location.pathname;
   let content: ReactNode;
   try {
-    if (path === "/admin/create") content = <CreateShipmentPage />;
-    else if (path === "/admin/shipments") content = <ShipmentsPage />;
-    else if (path === "/admin/leaderboard") content = <LeaderboardPage />;
-    else if (path === "/admin/settings") content = <SettingsPage />;
-    else content = <DashboardOverview />;
-  } catch (err) {
+    if (path === "/admin/create") content = <SafeSection><CreateShipmentPage /></SafeSection>;
+    else if (path === "/admin/shipments") content = <SafeSection><ShipmentsPage /></SafeSection>;
+    else if (path === "/admin/leaderboard") content = <SafeSection><LeaderboardPage /></SafeSection>;
+    else if (path === "/admin/settings") content = <SafeSection><SettingsPage /></SafeSection>;
+    else content = <SafeSection><DashboardOverview /></SafeSection>;
+  } catch (err: any) {
+    console.error("[AdminDashboard] renderContent error:", err);
     content = (
       <div className="p-8 text-center">
         <AlertCircle className="h-10 w-10 text-red-500 mx-auto mb-3" />
-        <p className="text-slate-600">Failed to load page content.</p>
+        <p className="text-slate-600">Failed to load page content: {err?.message}</p>
       </div>
     );
   }
@@ -187,8 +173,8 @@ export default function AdminDashboard() {
               {user?.name?.charAt(0).toUpperCase() || "A"}
             </div>
             <div className="text-sm overflow-hidden">
-              <p className="text-white font-medium truncate">{user?.name}</p>
-              <p className="text-slate-500 text-xs truncate">{user?.email}</p>
+              <p className="text-white font-medium truncate">{user?.name || "Admin"}</p>
+              <p className="text-slate-500 text-xs truncate">{user?.email || ""}</p>
             </div>
           </div>
           <Button
@@ -223,7 +209,7 @@ export default function AdminDashboard() {
           </div>
           <div className="flex items-center gap-3">
             <Badge variant="outline" className="text-xs hidden sm:inline-flex capitalize">
-              {user?.role}
+              {user?.role || "admin"}
             </Badge>
             <Button
               variant="ghost"
@@ -243,6 +229,15 @@ export default function AdminDashboard() {
         </main>
       </div>
     </div>
+  );
+}
+
+// Safe section wrapper - catches errors in individual pages
+function SafeSection({ children }: { children: ReactNode }) {
+  return (
+    <ErrorBoundary>
+      {children}
+    </ErrorBoundary>
   );
 }
 
@@ -320,7 +315,9 @@ function DashboardOverview() {
     let cancelled = false;
     async function load() {
       try {
+        console.log("[DashboardOverview] loading packages...");
         const packages = await packageService.list();
+        console.log("[DashboardOverview] loaded", packages.length, "packages");
         if (cancelled) return;
         setStats({
           total: packages.length,
@@ -331,7 +328,7 @@ function DashboardOverview() {
         setError(null);
       } catch (err: any) {
         if (cancelled) return;
-        console.error("Dashboard stats error:", err);
+        console.error("[DashboardOverview] error:", err);
         setError(err?.message || "Failed to load stats");
       } finally {
         if (!cancelled) setLoading(false);
@@ -369,41 +366,15 @@ function DashboardOverview() {
       )}
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg bg-blue-50 flex items-center justify-center"><Ship className="h-5 w-5 text-blue-700" /></div>
-              <div><p className="text-2xl font-bold text-slate-900">{stats.total}</p><p className="text-xs text-slate-500">Total Shipments</p></div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg bg-emerald-50 flex items-center justify-center"><CheckCircle2 className="h-5 w-5 text-emerald-600" /></div>
-              <div><p className="text-2xl font-bold text-slate-900">{stats.delivered}</p><p className="text-xs text-slate-500">Delivered</p></div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg bg-amber-50 flex items-center justify-center"><Truck className="h-5 w-5 text-amber-600" /></div>
-              <div><p className="text-2xl font-bold text-slate-900">{stats.inTransit}</p><p className="text-xs text-slate-500">In Transit</p></div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg bg-orange-50 flex items-center justify-center"><AlertCircle className="h-5 w-5 text-orange-600" /></div>
-              <div><p className="text-2xl font-bold text-slate-900">{stats.held}</p><p className="text-xs text-slate-500">Held by Customs</p></div>
-            </div>
-          </CardContent>
-        </Card>
+        <Card><CardContent className="p-4"><div className="flex items-center gap-3"><div className="w-10 h-10 rounded-lg bg-blue-50 flex items-center justify-center"><Ship className="h-5 w-5 text-blue-700" /></div><div><p className="text-2xl font-bold text-slate-900">{stats.total}</p><p className="text-xs text-slate-500">Total Shipments</p></div></div></CardContent></Card>
+        <Card><CardContent className="p-4"><div className="flex items-center gap-3"><div className="w-10 h-10 rounded-lg bg-emerald-50 flex items-center justify-center"><CheckCircle2 className="h-5 w-5 text-emerald-600" /></div><div><p className="text-2xl font-bold text-slate-900">{stats.delivered}</p><p className="text-xs text-slate-500">Delivered</p></div></div></CardContent></Card>
+        <Card><CardContent className="p-4"><div className="flex items-center gap-3"><div className="w-10 h-10 rounded-lg bg-amber-50 flex items-center justify-center"><Truck className="h-5 w-5 text-amber-600" /></div><div><p className="text-2xl font-bold text-slate-900">{stats.inTransit}</p><p className="text-xs text-slate-500">In Transit</p></div></div></CardContent></Card>
+        <Card><CardContent className="p-4"><div className="flex items-center gap-3"><div className="w-10 h-10 rounded-lg bg-orange-50 flex items-center justify-center"><AlertCircle className="h-5 w-5 text-orange-600" /></div><div><p className="text-2xl font-bold text-slate-900">{stats.held}</p><p className="text-xs text-slate-500">Held by Customs</p></div></div></CardContent></Card>
       </div>
 
-      <ShipmentsPage limit={5} />
+      <ErrorBoundary>
+        <ShipmentsPage limit={5} />
+      </ErrorBoundary>
     </div>
   );
 }
@@ -438,7 +409,7 @@ function ShipmentsPage({ limit }: { limit?: number }) {
         }
       } catch (err: any) {
         if (!cancelled) {
-          console.error("Shipments load error:", err);
+          console.error("[ShipmentsPage] error:", err);
           setError(err?.message || "Failed to load shipments");
           setPackages([]);
         }
@@ -602,7 +573,6 @@ function ShipmentsPage({ limit }: { limit?: number }) {
         </CardContent>
       </Card>
 
-      {/* Edit Dialog */}
       <Dialog open={!!editPkg} onOpenChange={() => setEditPkg(null)}>
         <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader><DialogTitle>Edit Package</DialogTitle></DialogHeader>
@@ -610,7 +580,6 @@ function ShipmentsPage({ limit }: { limit?: number }) {
         </DialogContent>
       </Dialog>
 
-      {/* Status Dialog */}
       <Dialog open={!!statusPkg} onOpenChange={() => setStatusPkg(null)}>
         <DialogContent className="max-w-md">
           <DialogHeader><DialogTitle>Update Status</DialogTitle></DialogHeader>
@@ -618,7 +587,6 @@ function ShipmentsPage({ limit }: { limit?: number }) {
         </DialogContent>
       </Dialog>
 
-      {/* Delete Dialog */}
       <Dialog open={!!deletePkg} onOpenChange={() => setDeletePkg(null)}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
@@ -670,7 +638,7 @@ function LeaderboardPage() {
         }
       } catch (err: any) {
         if (!cancelled) {
-          console.error("Leaderboard load error:", err);
+          console.error("[LeaderboardPage] error:", err);
           setError(err?.message || "Failed to load leaderboard");
         }
       } finally {

@@ -42,26 +42,46 @@ export const supabase: SupabaseClient | null =
 
 export const USE_LOCAL = !supabase;
 
-// LocalStorage helpers
-const LS_PACKAGES = "fishtrack_packages";
-const LS_HISTORY = "fishtrack_history";
+// LocalStorage helpers - DEFENSIVE (wraps JSON.parse in try-catch)
+const LS_PACKAGES = "titanroute_packages_v2";
+const LS_HISTORY = "titanroute_history_v2";
+
+function safeGet<T>(key: string, fallback: T): T {
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return fallback;
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) return parsed as T;
+    console.warn(`[supabase.ts] localStorage key ${key} is not an array, resetting`);
+    return fallback;
+  } catch (e) {
+    console.error(`[supabase.ts] Failed to parse localStorage key ${key}:`, e);
+    return fallback;
+  }
+}
+
+function safeSet(key: string, value: unknown) {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch (e) {
+    console.error(`[supabase.ts] Failed to write localStorage key ${key}:`, e);
+  }
+}
 
 function getPackages(): Package[] {
-  const raw = localStorage.getItem(LS_PACKAGES);
-  return raw ? JSON.parse(raw) : [];
+  return safeGet<Package[]>(LS_PACKAGES, []);
 }
 
 function setPackages(packages: Package[]) {
-  localStorage.setItem(LS_PACKAGES, JSON.stringify(packages));
+  safeSet(LS_PACKAGES, packages);
 }
 
 function getHistory(): PackageHistory[] {
-  const raw = localStorage.getItem(LS_HISTORY);
-  return raw ? JSON.parse(raw) : [];
+  return safeGet<PackageHistory[]>(LS_HISTORY, []);
 }
 
 function setHistory(history: PackageHistory[]) {
-  localStorage.setItem(LS_HISTORY, JSON.stringify(history));
+  safeSet(LS_HISTORY, history);
 }
 
 function generateId() {
@@ -82,9 +102,16 @@ function now() {
 }
 
 // Seed data
+try {
+  seedData();
+} catch (e) {
+  console.error("[supabase.ts] seedData failed:", e);
+}
+
 function seedData() {
-  const packages = getPackages();
-  if (packages.length > 0) return;
+  try {
+    const packages = getPackages();
+    if (packages.length > 0) return;
 
   const samplePackages: Package[] = [
     {
@@ -254,9 +281,10 @@ function seedData() {
 
   setPackages(samplePackages);
   setHistory(history);
+  } catch (e) {
+    console.error("[supabase.ts] seedData internal error:", e);
+  }
 }
-
-seedData();
 
 // Package service
 export const packageService = {
