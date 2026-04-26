@@ -31,8 +31,15 @@ const LS_KEY = "tr_admin_v3";
 const HAS_SUPABASE = !!supabase;
 
 console.log("[Auth] Mode:", HAS_SUPABASE ? "SUPABASE" : "DEMO (fallback)");
-if (HAS_SUPABASE) {
-  console.log("[Auth] Supabase URL:", (supabase as any)?.supabaseUrl || "unknown");
+
+// Timeout wrapper
+function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) =>
+      setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms)
+    ),
+  ]);
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -45,18 +52,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         try {
           const { data: { session } } = await supabase!.auth.getSession();
           if (session?.user) {
-            const adminUser = await loadSupabaseUser(session.user.id, session.user.email ?? "");
+            const adminUser = await withTimeout(
+              loadSupabaseUser(session.user.id, session.user.email ?? ""),
+              5000,
+              "loadSupabaseUser"
+            );
             if (adminUser) {
               setUser(adminUser);
               setIsLoading(false);
               return;
             }
           }
-        } catch {
-          /* ignore */
+        } catch (err: any) {
+          console.warn("[Auth] Session check failed:", err?.message);
         }
       }
 
+      // Fallback to localStorage
       try {
         const raw = localStorage.getItem(LS_KEY);
         if (raw) {
@@ -127,16 +139,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     if (HAS_SUPABASE) {
       try {
-        const { data, error } = await supabase!.auth.signInWithPassword({
-          email: trimmedEmail,
-          password: trimmedPassword,
-        });
+        const { data, error } = await withTimeout(
+          supabase!.auth.signInWithPassword({ email: trimmedEmail, password: trimmedPassword }),
+          15000,
+          "signInWithPassword"
+        );
 
         if (error || !data.user) {
           return { success: false, reason: "wrong_password", debug: error?.message || "No user returned" };
         }
 
-        const adminUser = await loadSupabaseUser(data.user.id, data.user.email ?? trimmedEmail);
+        const adminUser = await withTimeout(
+          loadSupabaseUser(data.user.id, data.user.email ?? trimmedEmail),
+          5000,
+          "loadSupabaseUser"
+        );
 
         if (adminUser) {
           setUser(adminUser);
