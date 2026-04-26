@@ -17,7 +17,7 @@ import {
   ChevronLeft,
   ChevronRight,
   X,
-  BarChart3,
+  Menu,
   Ship,
   Truck,
   Loader2,
@@ -256,7 +256,7 @@ function MobileNav() {
         className="md:hidden fixed bottom-4 right-4 z-50 w-12 h-12 rounded-full bg-blue-700 text-white shadow-lg"
         onClick={() => setOpen(!open)}
       >
-        <BarChart3 className="h-5 w-5" />
+        <Menu className="h-5 w-5" />
       </Button>
       {open && (
         <div className="fixed inset-0 z-40 md:hidden">
@@ -465,13 +465,13 @@ function ShipmentsPage({ limit }: { limit?: number }) {
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                 <Input placeholder="Search tracking code..." value={search} onChange={(e) => { setSearch(e.target.value); setPage(0); }} className="pl-9" />
               </div>
-              <Select value={statusFilter} onValueChange={(v) => { setStatusFilter(v); setPage(0); }}>
+              <Select value={statusFilter || "all"} onValueChange={(v) => { setStatusFilter(v === "all" ? "" : v); setPage(0); }}>
                 <SelectTrigger className="w-full sm:w-44">
                   <Filter className="h-4 w-4 mr-2 text-slate-400" />
                   <SelectValue placeholder="All Statuses" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">All Statuses</SelectItem>
+                  <SelectItem value="all">All Statuses</SelectItem>
                   <SelectItem value="sent">Sent</SelectItem>
                   <SelectItem value="received">Received</SelectItem>
                   <SelectItem value="delivered">Delivered</SelectItem>
@@ -484,7 +484,7 @@ function ShipmentsPage({ limit }: { limit?: number }) {
               <DialogTrigger asChild>
                 <Button className="bg-blue-700 hover:bg-blue-800"><Plus className="h-4 w-4 mr-1" /> New Package</Button>
               </DialogTrigger>
-              <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+              <DialogContent className="w-[95vw] max-w-lg max-h-[90vh] overflow-y-auto">
                 <DialogHeader><DialogTitle>Create New Package</DialogTitle></DialogHeader>
                 <PackageForm onSubmit={handleCreate} />
               </DialogContent>
@@ -508,16 +508,16 @@ function ShipmentsPage({ limit }: { limit?: number }) {
             </div>
           ) : (
             <>
-              <div className="overflow-x-auto">
-                <Table>
+              <div className="overflow-x-auto -mx-4 md:mx-0">
+                <Table className="min-w-[640px] md:min-w-0">
                   <TableHeader>
                     <TableRow>
                       <TableHead>Tracking</TableHead>
                       <TableHead>Carrier</TableHead>
-                      <TableHead>Recipient</TableHead>
+                      <TableHead className="hidden sm:table-cell">Recipient</TableHead>
                       <TableHead>Status</TableHead>
-                      <TableHead>Weight</TableHead>
-                      <TableHead>Created</TableHead>
+                      <TableHead className="hidden md:table-cell">Weight</TableHead>
+                      <TableHead className="hidden md:table-cell">Created</TableHead>
                       <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -535,20 +535,20 @@ function ShipmentsPage({ limit }: { limit?: number }) {
                             <TableCell>
                               <div className="flex items-center gap-2">
                                 <span className="text-lg">{carrier.emoji}</span>
-                                <span className="text-sm">{carrier.name}</span>
+                                <span className="text-sm hidden sm:inline">{carrier.name}</span>
                               </div>
                             </TableCell>
-                            <TableCell className="text-sm">{pkg.recipientName}</TableCell>
+                            <TableCell className="text-sm hidden sm:table-cell">{pkg.recipientName}</TableCell>
                             <TableCell>
                               <Badge className={`${STATUS_COLORS[pkg.status]} text-white text-xs`}>{STATUS_LABELS[pkg.status]}</Badge>
                             </TableCell>
-                            <TableCell className="text-sm">{pkg.weight} kg</TableCell>
-                            <TableCell className="text-sm text-slate-500">{new Date(pkg.createdAt).toLocaleDateString()}</TableCell>
+                            <TableCell className="text-sm hidden md:table-cell">{pkg.weight} kg</TableCell>
+                            <TableCell className="text-sm text-slate-500 hidden md:table-cell">{new Date(pkg.createdAt).toLocaleDateString()}</TableCell>
                             <TableCell className="text-right">
-                              <div className="flex items-center justify-end gap-1">
-                                <Button variant="ghost" size="sm" onClick={() => setEditPkg(pkg)}><Edit className="h-4 w-4" /></Button>
-                                <Button variant="ghost" size="sm" onClick={() => setStatusPkg(pkg)}><Package className="h-4 w-4" /></Button>
-                                <Button variant="ghost" size="sm" className="text-red-500 hover:text-red-700" onClick={() => setDeletePkg(pkg)}><Trash2 className="h-4 w-4" /></Button>
+                              <div className="flex items-center justify-end gap-0.5">
+                                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setEditPkg(pkg)}><Edit className="h-3.5 w-3.5" /></Button>
+                                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setStatusPkg(pkg)}><Package className="h-3.5 w-3.5" /></Button>
+                                <Button variant="ghost" size="icon" className="h-8 w-8 text-red-500 hover:text-red-700" onClick={() => setDeletePkg(pkg)}><Trash2 className="h-3.5 w-3.5" /></Button>
                               </div>
                             </TableCell>
                           </TableRow>
@@ -560,7 +560,7 @@ function ShipmentsPage({ limit }: { limit?: number }) {
               </div>
 
               {!limit && (
-                <div className="flex items-center justify-between px-4 py-3 border-t border-slate-200">
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-4 py-3 border-t border-slate-200">
                   <p className="text-sm text-slate-500">Page {page + 1} of {totalPages} ({packages.length} total)</p>
                   <div className="flex items-center gap-1">
                     <Button variant="outline" size="sm" onClick={() => setPage(page - 1)} disabled={page === 0}><ChevronLeft className="h-4 w-4" /></Button>
@@ -574,21 +574,21 @@ function ShipmentsPage({ limit }: { limit?: number }) {
       </Card>
 
       <Dialog open={!!editPkg} onOpenChange={() => setEditPkg(null)}>
-        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+        <DialogContent className="w-[95vw] max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader><DialogTitle>Edit Package</DialogTitle></DialogHeader>
           {editPkg && <PackageForm initialData={editPkg} onSubmit={handleUpdate} />}
         </DialogContent>
       </Dialog>
 
       <Dialog open={!!statusPkg} onOpenChange={() => setStatusPkg(null)}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="w-[95vw] max-w-md">
           <DialogHeader><DialogTitle>Update Status</DialogTitle></DialogHeader>
           {statusPkg && <StatusForm currentStatus={statusPkg.status} onSubmit={handleStatusUpdate} onCancel={() => setStatusPkg(null)} />}
         </DialogContent>
       </Dialog>
 
       <Dialog open={!!deletePkg} onOpenChange={() => setDeletePkg(null)}>
-        <DialogContent className="max-w-sm">
+        <DialogContent className="w-[95vw] max-w-sm">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-red-600"><Trash2 className="h-5 w-5" /> Delete Package</DialogTitle>
           </DialogHeader>
@@ -750,12 +750,12 @@ function PackageForm({ initialData, onSubmit }: { initialData?: Package; onSubmi
   };
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div><label className="text-sm font-medium text-slate-700">Sender Name</label><Input value={formData.senderName} onChange={(e) => setFormData({ ...formData, senderName: e.target.value })} required /></div>
         <div><label className="text-sm font-medium text-slate-700">Recipient Name</label><Input value={formData.recipientName} onChange={(e) => setFormData({ ...formData, recipientName: e.target.value })} required /></div>
       </div>
       <div><label className="text-sm font-medium text-slate-700">Address</label><Input value={formData.address} onChange={(e) => setFormData({ ...formData, address: e.target.value })} required /></div>
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div><label className="text-sm font-medium text-slate-700">Phone</label><Input value={formData.phone} onChange={(e) => setFormData({ ...formData, phone: e.target.value })} required /></div>
         <div><label className="text-sm font-medium text-slate-700">Weight (kg)</label><Input type="number" step="0.01" value={formData.weight} onChange={(e) => setFormData({ ...formData, weight: e.target.value })} required /></div>
       </div>
