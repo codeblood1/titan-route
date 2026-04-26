@@ -24,20 +24,14 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
-const DEMO_EMAIL = "admin@titanroute.com";
-const DEMO_PASS = "admin123";
 const LS_KEY = "tr_admin_v3";
-
 const HAS_SUPABASE = !!supabase;
 
-console.log("[Auth] Mode:", HAS_SUPABASE ? "SUPABASE" : "DEMO (fallback)");
-
-// Timeout wrapper
-function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
   return Promise.race([
     promise,
     new Promise<T>((_, reject) =>
-      setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms)
+      setTimeout(() => reject(new Error(`Timed out after ${ms}ms`)), ms)
     ),
   ]);
 }
@@ -50,13 +44,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     async function checkSession() {
       if (HAS_SUPABASE) {
         try {
-          const { data: { session } } = await supabase!.auth.getSession();
+          const { data: { session } } = await withTimeout(supabase!.auth.getSession(), 8000);
           if (session?.user) {
-            const adminUser = await withTimeout(
-              loadSupabaseUser(session.user.id, session.user.email ?? ""),
-              5000,
-              "loadSupabaseUser"
-            );
+            const adminUser = await loadSupabaseUser(session.user.id, session.user.email ?? "");
             if (adminUser) {
               setUser(adminUser);
               setIsLoading(false);
@@ -67,8 +57,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           console.warn("[Auth] Session check failed:", err?.message);
         }
       }
-
-      // Fallback to localStorage
       try {
         const raw = localStorage.getItem(LS_KEY);
         if (raw) {
@@ -80,7 +68,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
       setIsLoading(false);
     }
-
     checkSession();
 
     let subscription: { unsubscribe: () => void } | null = null;
@@ -96,7 +83,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       });
       subscription = data.subscription;
     }
-
     return () => subscription?.unsubscribe();
   }, []);
 
@@ -109,18 +95,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         .eq("user_id", userId)
         .eq("is_active", true)
         .maybeSingle();
-
       if (error) {
         console.error("[Auth] admin_roles query ERROR:", error.message);
         return null;
       }
-
       if (!roleData) {
         console.warn("[Auth] No active admin_roles for user_id:", userId);
-        console.warn(`[Auth] FIX: INSERT INTO admin_roles (user_id, role, full_name, is_active) VALUES ('${userId}', 'admin', 'Admin', true);`);
         return null;
       }
-
       return {
         id: userId,
         email: email.toLowerCase(),
@@ -141,41 +123,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       try {
         const { data, error } = await withTimeout(
           supabase!.auth.signInWithPassword({ email: trimmedEmail, password: trimmedPassword }),
-          15000,
-          "signInWithPassword"
+          10000
         );
-
         if (error || !data.user) {
           return { success: false, reason: "wrong_password", debug: error?.message || "No user returned" };
         }
-
-        const adminUser = await withTimeout(
-          loadSupabaseUser(data.user.id, data.user.email ?? trimmedEmail),
-          5000,
-          "loadSupabaseUser"
-        );
-
+        const adminUser = await loadSupabaseUser(data.user.id, data.user.email ?? trimmedEmail);
         if (adminUser) {
           setUser(adminUser);
+          localStorage.setItem(LS_KEY, JSON.stringify(adminUser));
           return { success: true };
         }
-
         await supabase!.auth.signOut();
         return { success: false, reason: "no_admin_role", debug: `User ${data.user.id} has no active admin_roles row` };
       } catch (err: any) {
-        return { success: false, reason: "supabase_error", debug: err?.message || String(err) };
+        const msg = err?.message || String(err);
+        console.error("[Auth] login exception:", msg);
+        return { success: false, reason: "supabase_error", debug: msg };
       }
     }
 
-    // Demo mode
-    if (trimmedEmail === DEMO_EMAIL.toLowerCase() && trimmedPassword === DEMO_PASS) {
-      const adminUser: AdminUser = { id: "admin-1", email: DEMO_EMAIL, name: "Administrator", role: "admin" };
-      setUser(adminUser);
-      localStorage.setItem(LS_KEY, JSON.stringify(adminUser));
-      return { success: true };
-    }
-
-    return { success: false, reason: "wrong_password", debug: "Demo mode: use admin@titanroute.com / admin123" };
+    return { success: false, reason: "supabase_error", debug: "Supabase not configured" };
   }, []);
 
   const logout = useCallback(async () => {

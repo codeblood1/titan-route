@@ -157,10 +157,12 @@ function PackageForm({
   initialData,
   onSubmit,
   isCreate = false,
+  isSubmitting = false,
 }: {
   initialData?: Package;
   onSubmit: (data: any, files: File[], keepMediaUrls: string[]) => void;
   isCreate?: boolean;
+  isSubmitting?: boolean;
 }) {
   const [formData, setFormData] = useState({
     senderName: initialData?.senderName || "",
@@ -354,7 +356,14 @@ function PackageForm({
       </div>
 
       <div className="pt-2 flex justify-end">
-        <Button type="submit" className="bg-blue-700 hover:bg-blue-800">{isCreate ? "Create Package" : "Update Package"}</Button>
+        <Button type="submit" className="bg-blue-700 hover:bg-blue-800" disabled={isSubmitting}>
+          {isSubmitting ? (
+            <span className="flex items-center gap-2">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              {isCreate ? "Creating..." : "Saving..."}
+            </span>
+          ) : isCreate ? "Create Package" : "Update Package"}
+        </Button>
       </div>
     </form>
   );
@@ -536,7 +545,7 @@ function ShipmentsPage() {
           <DialogContent className="w-[95vw] max-w-lg max-h-[90vh] overflow-y-auto">
             <DialogHeader><DialogTitle>Create New Package</DialogTitle></DialogHeader>
             {formError && <div className="p-2 bg-red-50 border border-red-200 rounded text-xs text-red-700 mb-2">{formError}</div>}
-            <PackageForm onSubmit={handleCreate} isCreate={true} />
+            <PackageForm onSubmit={handleCreate} isCreate={true} isSubmitting={isSubmitting} />
           </DialogContent>
         </Dialog>
       </div>
@@ -614,7 +623,7 @@ function ShipmentsPage() {
           <DialogHeader><DialogTitle>Edit Package</DialogTitle></DialogHeader>
           {formError && <div className="p-2 bg-red-50 border border-red-200 rounded text-xs text-red-700 mb-2">{formError}</div>}
           {isSubmitting && <div className="flex items-center justify-center py-2"><Loader2 className="h-5 w-5 animate-spin text-blue-600 mr-2" /><span className="text-sm text-slate-500">Saving...</span></div>}
-          {editPkg && <PackageForm initialData={editPkg} onSubmit={handleUpdate} />}
+          {editPkg && <PackageForm initialData={editPkg} onSubmit={handleUpdate} isSubmitting={isSubmitting} />}
         </DialogContent>
       </Dialog>
 
@@ -670,6 +679,7 @@ function CreateShipmentPage() {
     } catch (err: any) {
       console.error("[CreateShipmentPage] FAILED:", err?.message, err);
       setFormError(err?.message || "Failed to create package. Check browser console (F12) for details.");
+    } finally {
       setIsSubmitting(false);
     }
   };
@@ -681,7 +691,7 @@ function CreateShipmentPage() {
         <CardContent className="pt-6">
           {formError && <div className="p-2 bg-red-50 border border-red-200 rounded text-xs text-red-700 mb-4">{formError}</div>}
           {isSubmitting && <div className="flex items-center justify-center py-2 mb-4"><Loader2 className="h-5 w-5 animate-spin text-blue-600 mr-2" /><span className="text-sm text-slate-500">Creating...</span></div>}
-          <PackageForm onSubmit={handleSubmit} isCreate={true} />
+          <PackageForm onSubmit={handleSubmit} isCreate={true} isSubmitting={isSubmitting} />
         </CardContent>
       </Card>
     </div>
