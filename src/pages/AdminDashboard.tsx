@@ -17,7 +17,7 @@ import {
   ChevronLeft,
   ChevronRight,
   X,
-  Menu,
+
   Ship,
   Truck,
   Loader2,
@@ -76,7 +76,7 @@ function AdminDashboardInner() {
   const navigate = useNavigate();
   const location = useLocation();
 
-  console.log("[AdminDashboard] render - isLoading:", isLoading, "isAuthenticated:", isAuthenticated, "user:", user?.email);
+
 
   // Show spinner while auth initializes
   if (isLoading) {
@@ -92,7 +92,6 @@ function AdminDashboardInner() {
 
   // Not logged in
   if (!isAuthenticated) {
-    console.log("[AdminDashboard] Not authenticated, showing access required");
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center px-4">
         <Card className="w-full max-w-md text-center p-8 shadow-xl">
@@ -122,7 +121,6 @@ function AdminDashboardInner() {
     else if (path === "/admin/settings") content = <SafeSection><SettingsPage /></SafeSection>;
     else content = <SafeSection><DashboardOverview /></SafeSection>;
   } catch (err: any) {
-    console.error("[AdminDashboard] renderContent error:", err);
     content = (
       <div className="p-8 text-center">
         <AlertCircle className="h-10 w-10 text-red-500 mx-auto mb-3" />
@@ -189,11 +187,11 @@ function AdminDashboardInner() {
         </div>
       </aside>
 
-      {/* Mobile FAB */}
-      <MobileNav />
+      {/* Mobile Bottom Tab Bar */}
+      <BottomNav />
 
       {/* Main Content */}
-      <div className="flex-1 flex flex-col min-w-0">
+      <div className="flex-1 flex flex-col min-w-0 md:pb-0 pb-16">
         {/* Top Header */}
         <header className="bg-white border-b border-slate-200 sticky top-0 z-20 px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-3 md:hidden">
@@ -241,67 +239,40 @@ function SafeSection({ children }: { children: ReactNode }) {
   );
 }
 
-// ================= MOBILE NAV =================
-function MobileNav() {
-  const [open, setOpen] = useState(false);
+// ================= BOTTOM NAV (Mobile) =================
+const mobileNavItems = [
+  { icon: LayoutDashboard, label: "Home", path: "/admin" },
+  { icon: Package, label: "Shipments", path: "/admin/shipments" },
+  { icon: Plus, label: "Create", path: "/admin/create" },
+  { icon: Trophy, label: "Carriers", path: "/admin/leaderboard" },
+  { icon: Settings, label: "Settings", path: "/admin/settings" },
+];
+
+function BottomNav() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { logout } = useAuth();
+  const path = location.pathname;
 
   return (
-    <>
-      <Button
-        variant="ghost"
-        size="sm"
-        className="md:hidden fixed bottom-4 right-4 z-50 w-12 h-12 rounded-full bg-blue-700 text-white shadow-lg"
-        onClick={() => setOpen(!open)}
-      >
-        <Menu className="h-5 w-5" />
-      </Button>
-      {open && (
-        <div className="fixed inset-0 z-40 md:hidden">
-          <div className="absolute inset-0 bg-black/50" onClick={() => setOpen(false)} />
-          <div className="absolute left-0 top-0 bottom-0 w-64 bg-slate-900 text-slate-300 flex flex-col">
-            <div className="p-6 border-b border-slate-800">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-lg bg-blue-700 flex items-center justify-center">
-                  <Truck className="h-5 w-5 text-white" />
-                </div>
-                <h1 className="text-lg font-bold text-white">TitanRoute</h1>
-              </div>
-            </div>
-            <nav className="flex-1 py-4 px-3 space-y-1">
-              {sidebarItems.map((item) => {
-                const isActive = location.pathname === item.path;
-                return (
-                  <button
-                    key={item.path}
-                    onClick={() => { navigate(item.path); setOpen(false); }}
-                    className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
-                      isActive ? "bg-blue-700 text-white" : "text-slate-400 hover:text-white hover:bg-slate-800"
-                    }`}
-                  >
-                    <item.icon className="h-4 w-4" />
-                    {item.label}
-                  </button>
-                );
-              })}
-            </nav>
-            <div className="p-4 border-t border-slate-800">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => { logout(); setOpen(false); }}
-                className="w-full text-slate-400 hover:text-white hover:bg-slate-800 justify-start"
-              >
-                <LogOut className="h-4 w-4 mr-2" />
-                Logout
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
-    </>
+    <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-slate-200 safe-area-pb">
+      <div className="flex items-center justify-around">
+        {mobileNavItems.map((item) => {
+          const isActive = path === item.path;
+          return (
+            <button
+              key={item.path}
+              onClick={() => navigate(item.path)}
+              className={`flex flex-col items-center justify-center py-1.5 px-2 flex-1 min-w-0 transition-colors ${
+                isActive ? "text-blue-700" : "text-slate-400"
+              }`}
+            >
+              <item.icon className="h-[18px] w-[18px]" />
+              <span className="text-[10px] font-medium mt-0.5 leading-none">{item.label}</span>
+            </button>
+          );
+        })}
+      </div>
+    </nav>
   );
 }
 

@@ -73,3 +73,10 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* Mobile safe-area padding for bottom nav */
+@layer utilities {
+  .safe-area-pb {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+}

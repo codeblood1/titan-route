@@ -44,9 +44,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (HAS_SUPABASE) {
         try {
           const { data: { session } } = await supabase!.auth.getSession();
-          console.log("[Auth] Existing session:", session ? "YES" : "NO");
           if (session?.user) {
-            console.log("[Auth] Session user_id:", session.user.id);
             const adminUser = await loadSupabaseUser(session.user.id, session.user.email ?? "");
             if (adminUser) {
               setUser(adminUser);
@@ -54,8 +52,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               return;
             }
           }
-        } catch (err) {
-          console.warn("[Auth] Supabase session check failed:", err);
+        } catch {
+          /* ignore */
         }
       }
 
@@ -76,7 +74,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     let subscription: { unsubscribe: () => void } | null = null;
     if (HAS_SUPABASE) {
       const { data } = supabase!.auth.onAuthStateChange(async (event, session) => {
-        console.log("[Auth] Auth state change:", event, session?.user?.id);
         if (event === "SIGNED_IN" && session?.user) {
           const adminUser = await loadSupabaseUser(session.user.id, session.user.email ?? "");
           if (adminUser) setUser(adminUser);
@@ -94,17 +91,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   async function loadSupabaseUser(userId: string, email: string): Promise<AdminUser | null> {
     if (!HAS_SUPABASE) return null;
     try {
-      console.log("[Auth] Looking up admin_roles for user_id:", userId);
-
-      // First, try WITHOUT is_active filter to see if row exists at all
-      const { data: anyRoleData, error: anyRoleError } = await supabase!
-        .from("admin_roles")
-        .select("role, full_name, is_active, user_id")
-        .eq("user_id", userId);
-
-      console.log("[Auth] admin_roles ALL rows for this user:", { count: anyRoleData?.length ?? 0, rows: anyRoleData, error: anyRoleError?.message || null });
-
-      // Now try the strict query
       const { data: roleData, error } = await supabase!
         .from("admin_roles")
         .select("role, full_name, is_active, user_id")
@@ -112,26 +98,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         .eq("is_active", true)
         .maybeSingle();
 
-      console.log("[Auth] admin_roles strict query result:", { roleData, error: error?.message || null });
-
       if (error) {
-        console.error("[Auth] admin_roles query ERROR:", error.message, error.code, error.details);
+        console.error("[Auth] admin_roles query ERROR:", error.message);
         return null;
       }
 
       if (!roleData) {
-        console.warn("[Auth] No ACTIVE row in admin_roles for user_id:", userId);
-        if (anyRoleData && anyRoleData.length > 0) {
-          console.warn("[Auth] BUT found", anyRoleData.length, "inactive row(s). Check is_active flag.");
-          console.warn("[Auth] FIX SQL: UPDATE admin_roles SET is_active = true WHERE user_id = '" + userId + "';");
-        } else {
-          console.warn("[Auth] HINT: Run this SQL to fix:");
-          console.warn(`INSERT INTO admin_roles (user_id, role, full_name, is_active) VALUES ('${userId}', 'admin', 'Admin', true);`);
-        }
+        console.warn("[Auth] No active admin_roles for user_id:", userId);
+        console.warn(`[Auth] FIX: INSERT INTO admin_roles (user_id, role, full_name, is_active) VALUES ('${userId}', 'admin', 'Admin', true);`);
         return null;
       }
 
-      console.log("[Auth] Found admin role:", roleData.role, "for", email);
       return {
         id: userId,
         email: email.toLowerCase(),
@@ -139,7 +116,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         role: roleData.role,
       };
     } catch (err: any) {
-      console.error("[Auth] Exception in loadSupabaseUser:", err?.message || err);
+      console.error("[Auth] loadSupabaseUser exception:", err?.message || err);
       return null;
     }
   }
@@ -150,20 +127,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     if (HAS_SUPABASE) {
       try {
-        console.log("[Auth] Supabase signInWithPassword:", trimmedEmail);
         const { data, error } = await supabase!.auth.signInWithPassword({
           email: trimmedEmail,
           password: trimmedPassword,
         });
 
-        console.log("[Auth] signInWithPassword result:", { userId: data?.user?.id, hasSession: !!data?.session, error: error?.message || null });
-
         if (error || !data.user) {
-          console.warn("[Auth] signInWithPassword failed:", error?.message);
           return { success: false, reason: "wrong_password", debug: error?.message || "No user returned" };
         }
 
-        console.log("[Auth] signInWithPassword OK. user.id:", data.user.id);
         const adminUser = await loadSupabaseUser(data.user.id, data.user.email ?? trimmedEmail);
 
         if (adminUser) {
@@ -174,7 +146,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         await supabase!.auth.signOut();
         return { success: false, reason: "no_admin_role", debug: `User ${data.user.id} has no active admin_roles row` };
       } catch (err: any) {
-        console.error("[Auth] Supabase login exception:", err?.message || err);
         return { success: false, reason: "supabase_error", debug: err?.message || String(err) };
       }
     }
