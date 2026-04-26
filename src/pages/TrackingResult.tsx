@@ -1,7 +1,8 @@
-import { useEffect, useState, Suspense, lazy } from "react";
+import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router";
 import { packageService } from "@/lib/supabase";
 import type { Package, PackageHistory } from "@/lib/supabase";
+import LiveMap from "@/components/LiveMap";
 import {
   ArrowLeft,
   Package,
@@ -29,7 +30,6 @@ import {
   STATUS_LABELS,
 } from "@/const";
 
-const LiveMap = lazy(() => import("@/components/LiveMap"));
 
 export default function TrackingResult() {
   const { trackingCode } = useParams<{ trackingCode: string }>();
@@ -413,21 +413,13 @@ export default function TrackingResult() {
               </CardHeader>
               <CardContent className="p-0">
                 <div className="h-64 bg-slate-100">
-                  <Suspense
-                    fallback={
-                      <div className="h-full flex items-center justify-center text-slate-400">
-                        Loading map...
-                      </div>
-                    }
-                  >
-                    <LiveMap
-                      status={pkg.status}
-                      senderLat={pkg.senderLat}
-                      senderLng={pkg.senderLng}
-                      receiverLat={pkg.receiverLat}
-                      receiverLng={pkg.receiverLng}
-                    />
-                  </Suspense>
+                  <LiveMap
+                    status={pkg.status}
+                    senderLat={pkg.senderLat}
+                    senderLng={pkg.senderLng}
+                    receiverLat={pkg.receiverLat}
+                    receiverLng={pkg.receiverLng}
+                  />
                 </div>
               </CardContent>
             </Card>

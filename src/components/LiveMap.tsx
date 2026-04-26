@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from "react";
 import L from "leaflet";
-import "leaflet/dist/leaflet.css";
 import { Upload } from "lucide-react";
 
 interface LiveMapProps {
@@ -69,6 +68,7 @@ export default function LiveMap({
   const leafletMap = useRef<L.Map | null>(null);
   const markersRef = useRef<L.LayerGroup | null>(null);
   const [editMode, setEditMode] = useState<"sender" | "receiver">("sender");
+  const [isReady, setIsReady] = useState(false);
 
   const hasSender = senderLat != null && senderLng != null;
   const hasReceiver = receiverLat != null && receiverLng != null;
@@ -83,52 +83,62 @@ export default function LiveMap({
   useEffect(() => {
     if (!mapRef.current || leafletMap.current) return;
 
-    // Center on route midpoint
-    const midLat = (sender[0] + receiver[0]) / 2;
-    const midLng = (sender[1] + receiver[1]) / 2;
+    // Delay map creation to ensure container has dimensions
+    const timer = setTimeout(() => {
+      if (!mapRef.current) return;
 
-    const map = L.map(mapRef.current, {
-      center: [midLat, midLng],
-      zoom: 4,
-      zoomControl: false,
-      attributionControl: false,
-    });
+      const midLat = (sender[0] + receiver[0]) / 2;
+      const midLng = (sender[1] + receiver[1]) / 2;
 
-    leafletMap.current = map;
-
-    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-      maxZoom: 18,
-    }).addTo(map);
-
-    L.control.zoom({ position: "bottomright" }).addTo(map);
-
-    markersRef.current = L.layerGroup().addTo(map);
-
-    // Admin click handler
-    if (editable) {
-      map.on("click", (e) => {
-        const { lat, lng } = e.latlng;
-        if (editMode === "sender" && onSenderChange) {
-          onSenderChange(lat, lng);
-        } else if (editMode === "receiver" && onReceiverChange) {
-          onReceiverChange(lat, lng);
-        }
+      const map = L.map(mapRef.current, {
+        center: [midLat, midLng],
+        zoom: 4,
+        zoomControl: false,
+        attributionControl: false,
       });
-    }
+
+      leafletMap.current = map;
+      markersRef.current = L.layerGroup().addTo(map);
+
+      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        maxZoom: 18,
+        attribution: '',
+      }).addTo(map);
+
+      L.control.zoom({ position: "bottomright" }).addTo(map);
+
+      if (editable) {
+        map.on("click", (e) => {
+          const { lat, lng } = e.latlng;
+          if (editMode === "sender" && onSenderChange) {
+            onSenderChange(lat, lng);
+          } else if (editMode === "receiver" && onReceiverChange) {
+            onReceiverChange(lat, lng);
+          }
+        });
+      }
+
+      setIsReady(true);
+    }, 100);
 
     return () => {
-      map.remove();
-      leafletMap.current = null;
+      clearTimeout(timer);
+      if (leafletMap.current) {
+        leafletMap.current.remove();
+        leafletMap.current = null;
+      }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Update markers whenever coords or status changes
   useEffect(() => {
-    if (!leafletMap.current || !markersRef.current) return;
+    if (!isReady || !leafletMap.current || !markersRef.current) return;
+
+    const map = leafletMap.current;
+    map.invalidateSize();
 
     markersRef.current.clearLayers();
-    const map = leafletMap.current;
 
     // Route polyline
     const routeLine = L.polyline([sender, receiver], {
@@ -167,7 +177,7 @@ export default function LiveMap({
     const bounds = L.latLngBounds([sender, receiver]);
     map.fitBounds(bounds, { padding: [40, 40] });
 
-  }, [senderLat, senderLng, receiverLat, receiverLng, status]);
+  }, [senderLat, senderLng, receiverLat, receiverLng, status, isReady]);
 
   return (
     <div className="relative w-full h-full">

@@ -1,4 +1,5 @@
 import { Routes, Route } from "react-router";
+import "leaflet/dist/leaflet.css";
 import Track from "./pages/Track";
 import TrackingResult from "./pages/TrackingResult";
 import AdminDashboard from "./pages/AdminDashboard";
