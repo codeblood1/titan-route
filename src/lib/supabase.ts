@@ -1,5 +1,15 @@
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
 
+// Timeout wrapper for async operations
+function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) =>
+      setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms)
+    ),
+  ]);
+}
+
 // Types
 export interface Package {
   id: string;
@@ -142,7 +152,12 @@ function setHistory(history: PackageHistory[]) {
 }
 
 function generateId() {
-  return Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+  // Proper UUID v4 format for Supabase UUID columns
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    const v = c === "x" ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
 }
 
 function generateTrackingCode() {
@@ -425,7 +440,11 @@ export const packageService = {
     };
 
     if (!USE_LOCAL && supabase) {
-      const { data: insertedRows, error } = await supabase.from("packages").insert(mapToSupabasePackage(pkg)).select();
+      const { data: insertedRows, error } = await withTimeout(
+        supabase.from("packages").insert(mapToSupabasePackage(pkg)).select(),
+        15000,
+        "Package create"
+      );
       if (error) {
         console.error("[packageService.create] Supabase insert error:", error.message, error.code, error.details);
         throw new Error(`Database insert failed: ${error.message}`);
@@ -459,11 +478,11 @@ export const packageService = {
 
   async update(id: string, data: Partial<Package>): Promise<Package> {
     if (!USE_LOCAL && supabase) {
-      const { data: updatedRows, error } = await supabase
-        .from("packages")
-        .update(mapToSupabasePackageUpdate(data))
-        .eq("id", id)
-        .select();
+      const { data: updatedRows, error } = await withTimeout(
+        supabase.from("packages").update(mapToSupabasePackageUpdate(data)).eq("id", id).select(),
+        15000,
+        "Package update"
+      );
       if (error) {
         console.error("[packageService.update] Supabase update error:", error.message, error.code, error.details);
         throw new Error(`Database update failed: ${error.message}`);
