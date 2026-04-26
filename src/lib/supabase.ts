@@ -677,7 +677,32 @@ function mapFromSupabaseHistory(row: any): PackageHistory {
   };
 }
 
-// File upload helpers
+export async function checkSupabaseHealth(): Promise<{ ok: boolean; ms: number; error?: string }> {
+  if (!supabase) return { ok: false, ms: 0, error: "Supabase client not initialized" };
+  const start = Date.now();
+  try {
+    const { error } = await withTimeout(
+      supabase.from("packages").select("id", { count: "exact", head: true }),
+      8000,
+      "Health check"
+    );
+    const ms = Date.now() - start;
+    if (error) {
+      if (error.code === "PGRST301") {
+        return { ok: false, ms, error: "Project is paused. Go to Supabase Dashboard and click Restore." };
+      }
+      return { ok: false, ms, error: error.message };
+    }
+    return { ok: true, ms };
+  } catch (err: any) {
+    const ms = Date.now() - start;
+    const msg = err?.message || "";
+    if (msg.includes("timed out")) {
+      return { ok: false, ms, error: "Connection timed out. Your Supabase project may be paused or the URL/Key is wrong." };
+    }
+    return { ok: false, ms, error: msg };
+  }
+}
 export async function uploadPackageFiles(files: File[]): Promise<{ urls: string[]; errors: string[] }> {
   const urls: string[] = [];
   const errors: string[] = [];

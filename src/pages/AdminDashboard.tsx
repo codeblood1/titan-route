@@ -1,12 +1,13 @@
 import { useState, useEffect, type ReactNode, Suspense, lazy, Component } from "react";
 import { useNavigate, useLocation } from "react-router";
 import { useAuth } from "@/hooks/useAuth";
-import { packageService, uploadPackageFiles, type Package } from "@/lib/supabase";
+import { packageService, uploadPackageFiles, checkSupabaseHealth, type Package } from "@/lib/supabase";
 import {
   LayoutDashboard, Package, Plus, Trophy, Settings, LogOut,
   Search, Edit, Trash2, Filter, ChevronLeft, ChevronRight,
   X, Menu, Ship, Truck, Loader2, AlertCircle, CheckCircle2,
   Upload, Image as ImageIcon, Video, MapPin, Camera, Shield,
+  Wifi, WifiOff,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -494,12 +495,18 @@ function ShipmentsPage() {
     try {
       const { urls, errors } = files.length > 0 ? await uploadPackageFiles(files) : { urls: [], errors: [] };
       if (errors.length > 0) setFormError("Upload warnings: " + errors.join("; "));
-      console.log("[handleCreate] Creating package with data:", { ...data, mediaUrls: urls });
       await packageService.create({ ...data, mediaUrls: urls });
       setCreateOpen(false); setRefreshKey((k) => k + 1);
     } catch (err: any) {
-      console.error("[handleCreate] FAILED:", err?.message, err);
-      setFormError(err?.message || "Failed to create package. Check browser console (F12) for details.");
+      const msg = err?.message || "";
+      if (msg.includes("timed out")) {
+        setFormError(
+          "Connection to Supabase timed out. Your project may be paused or unreachable. " +
+          "Go to your Supabase Dashboard and check if the project shows 'Paused'. If so, click 'Restore'."
+        );
+      } else {
+        setFormError(msg || "Failed to create package.");
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -511,12 +518,18 @@ function ShipmentsPage() {
     try {
       const { urls, errors } = files.length > 0 ? await uploadPackageFiles(files) : { urls: [], errors: [] };
       if (errors.length > 0) setFormError("Upload warnings: " + errors.join("; "));
-      console.log("[handleUpdate] Updating package", editPkg.id, "with data:", { ...data, mediaUrls: [...keepMediaUrls, ...urls] });
       await packageService.update(editPkg.id, { ...data, mediaUrls: [...keepMediaUrls, ...urls] });
       setEditPkg(null); setRefreshKey((k) => k + 1);
     } catch (err: any) {
-      console.error("[handleUpdate] FAILED:", err?.message, err);
-      setFormError(err?.message || "Failed to update package. Check browser console (F12) for details.");
+      const msg = err?.message || "";
+      if (msg.includes("timed out")) {
+        setFormError(
+          "Connection to Supabase timed out. Your project may be paused or unreachable. " +
+          "Go to your Supabase Dashboard and check if the project shows 'Paused'. If so, click 'Restore'."
+        );
+      } else {
+        setFormError(msg || "Failed to update package.");
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -673,12 +686,18 @@ function CreateShipmentPage() {
     try {
       const { urls, errors } = files.length > 0 ? await uploadPackageFiles(files) : { urls: [], errors: [] };
       if (errors.length > 0) setFormError("Upload warnings: " + errors.join("; "));
-      console.log("[CreateShipmentPage] Creating package:", { ...data, mediaUrls: urls });
       await packageService.create({ ...data, mediaUrls: urls });
       navigate("/admin/shipments");
     } catch (err: any) {
-      console.error("[CreateShipmentPage] FAILED:", err?.message, err);
-      setFormError(err?.message || "Failed to create package. Check browser console (F12) for details.");
+      const msg = err?.message || "";
+      if (msg.includes("timed out")) {
+        setFormError(
+          "Connection to Supabase timed out. Your project may be paused or unreachable. " +
+          "Go to your Supabase Dashboard and check if the project shows 'Paused'. If so, click 'Restore'."
+        );
+      } else {
+        setFormError(msg || "Failed to create package.");
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -757,6 +776,42 @@ function SettingsPage() {
   );
 }
 
+// ============== CONNECTION BANNER ==============
+function ConnectionBanner() {
+  const [health, setHealth] = useState<{ ok: boolean; checked: boolean; error?: string }>({ ok: true, checked: false });
+
+  useEffect(() => {
+    let cancelled = false;
+    async function check() {
+      const result = await checkSupabaseHealth();
+      if (!cancelled) setHealth({ ok: result.ok, checked: true, error: result.error });
+    }
+    check();
+    const interval = setInterval(check, 30000);
+    return () => { cancelled = true; clearInterval(interval); };
+  }, []);
+
+  if (!health.checked || health.ok) return null;
+
+  return (
+    <div className="bg-red-50 border-b border-red-200 px-4 py-2.5">
+      <div className="flex items-center gap-2 text-sm text-red-700">
+        <WifiOff className="h-4 w-4 shrink-0" />
+        <span className="font-medium">Supabase unreachable:</span>
+        <span>{health.error}</span>
+        <a
+          href="https://supabase.com/dashboard"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="ml-auto text-xs font-semibold underline hover:text-red-900"
+        >
+          Open Supabase Dashboard →
+        </a>
+      </div>
+    </div>
+  );
+}
+
 // ============== MAIN EXPORT ==============
 export default function AdminDashboard() {
   return (
@@ -819,6 +874,7 @@ function AdminDashboardInner() {
       <Sidebar />
       <BottomNav />
       <div className="flex-1 flex flex-col min-w-0 md:ml-64 md:pb-0 pb-16">
+        <ConnectionBanner />
         <header className="bg-white border-b border-slate-200 px-4 sm:px-8 py-4 flex items-center justify-between sticky top-0 z-20">
           <h2 className="text-lg font-semibold text-slate-900">
             {path === "/admin" ? "Dashboard" : path === "/admin/shipments" ? "Shipments" : path === "/admin/create" ? "New Shipment" : path === "/admin/leaderboard" ? "Leaderboard" : "Settings"}
