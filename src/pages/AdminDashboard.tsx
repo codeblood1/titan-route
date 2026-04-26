@@ -459,18 +459,22 @@ function ShipmentsPage() {
   const [createOpen, setCreateOpen] = useState(false);
   const [formError, setFormError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [newStatus, setNewStatus] = useState("");
+  const [loadError, setLoadError] = useState("");
   const [statusReason, setStatusReason] = useState("");
   const PAGE_SIZE = 10;
 
   useEffect(() => {
     let cancelled = false;
     async function load() {
+      setLoadError("");
       try {
         const data = await packageService.getAll();
         if (!cancelled) setPackages(data);
-      } catch (e) {
-        if (!cancelled) console.error("[ShipmentsPage] load error:", e);
+      } catch (e: any) {
+        if (!cancelled) {
+          console.error("[ShipmentsPage] load error:", e);
+          setLoadError(e?.message || "Failed to load packages from Supabase");
+        }
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -580,7 +584,14 @@ function ShipmentsPage() {
             </Select>
           </div>
 
-          {loading ? <div className="flex items-center justify-center h-32"><Loader2 className="h-6 w-6 animate-spin text-blue-600" /></div> : (
+          {loading ? <div className="flex items-center justify-center h-32"><Loader2 className="h-6 w-6 animate-spin text-blue-600" /></div> : loadError ? (
+            <div className="p-6 text-center">
+              <AlertCircle className="h-8 w-8 text-red-500 mx-auto mb-2" />
+              <p className="text-sm font-medium text-red-700 mb-1">Failed to load packages</p>
+              <p className="text-xs text-red-500">{loadError}</p>
+              <Button size="sm" variant="outline" className="mt-3" onClick={() => setRefreshKey(k => k + 1)}>Retry</Button>
+            </div>
+          ) : (
             <>
               <div className="overflow-x-auto -mx-4 md:mx-0">
                 <Table className="min-w-[640px] md:min-w-0">

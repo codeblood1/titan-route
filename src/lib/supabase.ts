@@ -52,13 +52,13 @@ export interface LeaderboardEntry {
 const LS_SUPABASE_URL = "titanroute_supabase_url";
 const LS_SUPABASE_KEY = "titanroute_supabase_key";
 
-function getRuntimeSupabaseUrl(): string | null {
+export function getRuntimeSupabaseUrl(): string | null {
   try {
     return localStorage.getItem(LS_SUPABASE_URL) || null;
   } catch { return null; }
 }
 
-function getRuntimeSupabaseKey(): string | null {
+export function getRuntimeSupabaseKey(): string | null {
   try {
     return localStorage.getItem(LS_SUPABASE_KEY) || null;
   } catch { return null; }
@@ -394,7 +394,7 @@ export const packageService = {
       if (filters?.status) {
         query = query.eq("status", filters.status);
       }
-      const { data, error } = await query;
+      const { data, error } = await withTimeout(query, 15000, "Package list");
       if (error) throw error;
       return (data || []).map(mapFromSupabasePackage);
     }
@@ -506,9 +506,14 @@ export const packageService = {
     if (!USE_LOCAL && supabase) {
       const updateData: any = { status, updated_at: now() };
       if (status === "held_by_customs") updateData.custom_status_reason = reason || null;
-      const { data: updated, error } = await supabase.from("packages").update(updateData).eq("id", id).select().single();
+      const { data: updatedRows, error } = await withTimeout(
+        supabase.from("packages").update(updateData).eq("id", id).select(),
+        15000,
+        "Package updateStatus"
+      );
       if (error) throw error;
-      return mapFromSupabasePackage(updated);
+      if (!updatedRows || updatedRows.length === 0) throw new Error("Update succeeded but no rows returned");
+      return mapFromSupabasePackage(updatedRows[0]);
     }
 
     const packages = getPackages();
