@@ -406,7 +406,7 @@ export const packageService = {
         .from("packages")
         .select("*")
         .eq("tracking_code", code.toUpperCase())
-        .single();
+        .maybeSingle();
       if (error || !data) return null;
       return mapFromSupabasePackage(data);
     }
@@ -425,9 +425,17 @@ export const packageService = {
     };
 
     if (!USE_LOCAL && supabase) {
-      const { data: inserted, error } = await supabase.from("packages").insert(mapToSupabasePackage(pkg)).select().single();
-      if (error) throw error;
-      return mapFromSupabasePackage(inserted);
+      const { data: insertedRows, error } = await supabase.from("packages").insert(mapToSupabasePackage(pkg)).select();
+      if (error) {
+        console.error("[packageService.create] Supabase insert error:", error.message, error.code, error.details);
+        throw new Error(`Database insert failed: ${error.message}`);
+      }
+      if (!insertedRows || insertedRows.length === 0) {
+        console.warn("[packageService.create] Insert succeeded but no rows returned. RLS may be blocking SELECT after INSERT.");
+        // Return the local pkg object as fallback
+        return pkg;
+      }
+      return mapFromSupabasePackage(insertedRows[0]);
     }
 
     const packages = getPackages();
@@ -451,14 +459,20 @@ export const packageService = {
 
   async update(id: string, data: Partial<Package>): Promise<Package> {
     if (!USE_LOCAL && supabase) {
-      const { data: updated, error } = await supabase
+      const { data: updatedRows, error } = await supabase
         .from("packages")
         .update(mapToSupabasePackageUpdate(data))
         .eq("id", id)
-        .select()
-        .single();
-      if (error) throw error;
-      return mapFromSupabasePackage(updated);
+        .select();
+      if (error) {
+        console.error("[packageService.update] Supabase update error:", error.message, error.code, error.details);
+        throw new Error(`Database update failed: ${error.message}`);
+      }
+      if (!updatedRows || updatedRows.length === 0) {
+        console.warn("[packageService.update] Update succeeded but no rows returned.");
+        throw new Error("Update succeeded but row could not be read back.");
+      }
+      return mapFromSupabasePackage(updatedRows[0]);
     }
 
     const packages = getPackages();
@@ -645,25 +659,38 @@ function mapFromSupabaseHistory(row: any): PackageHistory {
 }
 
 // File upload helpers
-export async function uploadPackageFiles(files: File[]): Promise<string[]> {
+export async function uploadPackageFiles(files: File[]): Promise<{ urls: string[]; errors: string[] }> {
+  const urls: string[] = [];
+  const errors: string[] = [];
+
   if (!supabase) {
     // LocalStorage fallback: convert to base64 data URIs
-    const urls: string[] = [];
     for (const file of files) {
-      const reader = new FileReader();
-      const dataUrl = await new Promise<string>((resolve, reject) => {
-        reader.onloadend = () => resolve(reader.result as string);
-        reader.onerror = reject;
-        reader.readAsDataURL(file);
-      });
-      urls.push(dataUrl);
+      if (file.size > 2 * 1024 * 1024) {
+        errors.push(`${file.name}: File too large (max 2MB in demo mode)`);
+        continue;
+      }
+      try {
+        const reader = new FileReader();
+        const dataUrl = await new Promise<string>((resolve, reject) => {
+          reader.onloadend = () => resolve(reader.result as string);
+          reader.onerror = reject;
+          reader.readAsDataURL(file);
+        });
+        urls.push(dataUrl);
+      } catch {
+        errors.push(`${file.name}: Failed to read file`);
+      }
     }
-    return urls;
+    return { urls, errors };
   }
 
   // Supabase Storage upload
-  const urls: string[] = [];
   for (const file of files) {
+    if (file.size > 10 * 1024 * 1024) {
+      errors.push(`${file.name}: File too large (max 10MB)`);
+      continue;
+    }
     const fileExt = file.name.split('.').pop();
     const fileName = `${Date.now()}-${Math.random().toString(36).substring(2, 9)}.${fileExt}`;
     const filePath = `packages/${fileName}`;
@@ -673,7 +700,7 @@ export async function uploadPackageFiles(files: File[]): Promise<string[]> {
       .upload(filePath, file, { upsert: false });
 
     if (uploadError) {
-      console.warn('[uploadPackageFiles] Upload failed:', uploadError.message);
+      errors.push(`${file.name}: ${uploadError.message}`);
       continue;
     }
 
@@ -683,7 +710,9 @@ export async function uploadPackageFiles(files: File[]): Promise<string[]> {
 
     if (urlData?.publicUrl) {
       urls.push(urlData.publicUrl);
+    } else {
+      errors.push(`${file.name}: Failed to get public URL`);
     }
   }
-  return urls;
+  return { urls, errors };
 }

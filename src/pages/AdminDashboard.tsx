@@ -485,10 +485,12 @@ function ShipmentsPage() {
     try {
       const { urls, errors } = files.length > 0 ? await uploadPackageFiles(files) : { urls: [], errors: [] };
       if (errors.length > 0) setFormError("Upload warnings: " + errors.join("; "));
+      console.log("[handleCreate] Creating package with data:", { ...data, mediaUrls: urls });
       await packageService.create({ ...data, mediaUrls: urls });
       setCreateOpen(false); setRefreshKey((k) => k + 1);
     } catch (err: any) {
-      setFormError(err?.message || "Failed to create package. Check console for details.");
+      console.error("[handleCreate] FAILED:", err?.message, err);
+      setFormError(err?.message || "Failed to create package. Check browser console (F12) for details.");
     } finally {
       setIsSubmitting(false);
     }
@@ -500,10 +502,12 @@ function ShipmentsPage() {
     try {
       const { urls, errors } = files.length > 0 ? await uploadPackageFiles(files) : { urls: [], errors: [] };
       if (errors.length > 0) setFormError("Upload warnings: " + errors.join("; "));
+      console.log("[handleUpdate] Updating package", editPkg.id, "with data:", { ...data, mediaUrls: [...keepMediaUrls, ...urls] });
       await packageService.update(editPkg.id, { ...data, mediaUrls: [...keepMediaUrls, ...urls] });
       setEditPkg(null); setRefreshKey((k) => k + 1);
     } catch (err: any) {
-      setFormError(err?.message || "Failed to update package. Check console for details.");
+      console.error("[handleUpdate] FAILED:", err?.message, err);
+      setFormError(err?.message || "Failed to update package. Check browser console (F12) for details.");
     } finally {
       setIsSubmitting(false);
     }
@@ -660,10 +664,12 @@ function CreateShipmentPage() {
     try {
       const { urls, errors } = files.length > 0 ? await uploadPackageFiles(files) : { urls: [], errors: [] };
       if (errors.length > 0) setFormError("Upload warnings: " + errors.join("; "));
+      console.log("[CreateShipmentPage] Creating package:", { ...data, mediaUrls: urls });
       await packageService.create({ ...data, mediaUrls: urls });
       navigate("/admin/shipments");
     } catch (err: any) {
-      setFormError(err?.message || "Failed to create package.");
+      console.error("[CreateShipmentPage] FAILED:", err?.message, err);
+      setFormError(err?.message || "Failed to create package. Check browser console (F12) for details.");
       setIsSubmitting(false);
     }
   };
