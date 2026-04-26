@@ -14,6 +14,11 @@ export interface Package {
   fishAvatar: string;
   status: "sent" | "received" | "delivered" | "canceled" | "held_by_customs";
   customStatusReason: string | null;
+  mediaUrls: string[];
+  senderLat: number | null;
+  senderLng: number | null;
+  receiverLat: number | null;
+  receiverLng: number | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -176,9 +181,14 @@ function seedData() {
       weight: 2.5,
       description: "Electronics package",
       notes: "Fragile contents",
-      fishAvatar: "salmon",
+      fishAvatar: "express",
       status: "delivered",
       customStatusReason: null,
+      mediaUrls: [],
+      senderLat: 25.7617,
+      senderLng: -80.1918,
+      receiverLat: 34.0522,
+      receiverLng: -118.2437,
       createdAt: new Date(Date.now() - 86400000 * 3).toISOString(),
       updatedAt: new Date(Date.now() - 86400000).toISOString(),
     },
@@ -192,9 +202,14 @@ function seedData() {
       weight: 1.8,
       description: "Books and documents",
       notes: null,
-      fishAvatar: "tuna",
+      fishAvatar: "voyager",
       status: "received",
       customStatusReason: null,
+      mediaUrls: [],
+      senderLat: 47.6062,
+      senderLng: -122.3321,
+      receiverLat: 40.7128,
+      receiverLng: -74.006,
       createdAt: new Date(Date.now() - 86400000 * 2).toISOString(),
       updatedAt: new Date(Date.now() - 86400000).toISOString(),
     },
@@ -208,9 +223,14 @@ function seedData() {
       weight: 5.2,
       description: "Sports equipment",
       notes: "Handle with care",
-      fishAvatar: "shark",
+      fishAvatar: "sky",
       status: "sent",
       customStatusReason: null,
+      mediaUrls: [],
+      senderLat: 32.7157,
+      senderLng: -117.1611,
+      receiverLat: 37.7749,
+      receiverLng: -122.4194,
       createdAt: new Date(Date.now() - 86400000).toISOString(),
       updatedAt: new Date(Date.now() - 86400000).toISOString(),
     },
@@ -224,9 +244,14 @@ function seedData() {
       weight: 0.8,
       description: "Jewelry",
       notes: "High value - insured",
-      fishAvatar: "clownfish",
+      fishAvatar: "trail",
       status: "held_by_customs",
       customStatusReason: "Missing customs declaration form",
+      mediaUrls: [],
+      senderLat: 42.3601,
+      senderLng: -71.0589,
+      receiverLat: 25.7617,
+      receiverLng: -80.1918,
       createdAt: new Date(Date.now() - 86400000 * 4).toISOString(),
       updatedAt: new Date(Date.now() - 86400000 * 2).toISOString(),
     },
@@ -240,9 +265,14 @@ function seedData() {
       weight: 3.0,
       description: "Clothing items",
       notes: null,
-      fishAvatar: "dolphin",
+      fishAvatar: "swift",
       status: "canceled",
       customStatusReason: null,
+      mediaUrls: [],
+      senderLat: 27.9506,
+      senderLng: -82.4572,
+      receiverLat: 33.4484,
+      receiverLng: -112.0740,
       createdAt: new Date(Date.now() - 86400000 * 5).toISOString(),
       updatedAt: new Date(Date.now() - 86400000 * 3).toISOString(),
     },
@@ -547,6 +577,11 @@ function mapFromSupabasePackage(row: any): Package {
     fishAvatar: row.fish_avatar,
     status: row.status,
     customStatusReason: row.custom_status_reason,
+    mediaUrls: row.media_urls || [],
+    senderLat: row.sender_lat,
+    senderLng: row.sender_lng,
+    receiverLat: row.receiver_lat,
+    receiverLng: row.receiver_lng,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -566,6 +601,11 @@ function mapToSupabasePackage(pkg: Package): any {
     fish_avatar: pkg.fishAvatar,
     status: pkg.status,
     custom_status_reason: pkg.customStatusReason,
+    media_urls: pkg.mediaUrls,
+    sender_lat: pkg.senderLat,
+    sender_lng: pkg.senderLng,
+    receiver_lat: pkg.receiverLat,
+    receiver_lng: pkg.receiverLng,
     created_at: pkg.createdAt,
     updated_at: pkg.updatedAt,
   };
@@ -584,6 +624,11 @@ function mapToSupabasePackageUpdate(data: Partial<Package>): any {
   if (data.fishAvatar !== undefined) result.fish_avatar = data.fishAvatar;
   if (data.status !== undefined) result.status = data.status;
   if (data.customStatusReason !== undefined) result.custom_status_reason = data.customStatusReason;
+  if (data.mediaUrls !== undefined) result.media_urls = data.mediaUrls;
+  if (data.senderLat !== undefined) result.sender_lat = data.senderLat;
+  if (data.senderLng !== undefined) result.sender_lng = data.senderLng;
+  if (data.receiverLat !== undefined) result.receiver_lat = data.receiverLat;
+  if (data.receiverLng !== undefined) result.receiver_lng = data.receiverLng;
   result.updated_at = now();
   return result;
 }
@@ -597,4 +642,48 @@ function mapFromSupabaseHistory(row: any): PackageHistory {
     changedBy: row.changed_by,
     changedAt: row.changed_at,
   };
+}
+
+// File upload helpers
+export async function uploadPackageFiles(files: File[]): Promise<string[]> {
+  if (!supabase) {
+    // LocalStorage fallback: convert to base64 data URIs
+    const urls: string[] = [];
+    for (const file of files) {
+      const reader = new FileReader();
+      const dataUrl = await new Promise<string>((resolve, reject) => {
+        reader.onloadend = () => resolve(reader.result as string);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+      urls.push(dataUrl);
+    }
+    return urls;
+  }
+
+  // Supabase Storage upload
+  const urls: string[] = [];
+  for (const file of files) {
+    const fileExt = file.name.split('.').pop();
+    const fileName = `${Date.now()}-${Math.random().toString(36).substring(2, 9)}.${fileExt}`;
+    const filePath = `packages/${fileName}`;
+
+    const { error: uploadError } = await supabase.storage
+      .from('titanroute-media')
+      .upload(filePath, file, { upsert: false });
+
+    if (uploadError) {
+      console.warn('[uploadPackageFiles] Upload failed:', uploadError.message);
+      continue;
+    }
+
+    const { data: urlData } = supabase.storage
+      .from('titanroute-media')
+      .getPublicUrl(filePath);
+
+    if (urlData?.publicUrl) {
+      urls.push(urlData.publicUrl);
+    }
+  }
+  return urls;
 }

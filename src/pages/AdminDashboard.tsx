@@ -1,7 +1,7 @@
-import { useState, useEffect, type ReactNode } from "react";
+import { useState, useEffect, type ReactNode, Suspense, lazy } from "react";
 import { useNavigate, useLocation } from "react-router";
 import { useAuth } from "@/hooks/useAuth";
-import { packageService, type Package } from "@/lib/supabase";
+import { packageService, uploadPackageFiles, type Package } from "@/lib/supabase";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import {
   LayoutDashboard,
@@ -23,6 +23,11 @@ import {
   Loader2,
   AlertCircle,
   CheckCircle2,
+  Upload,
+  Image as ImageIcon,
+  Video,
+  MapPin,
+  Camera,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -395,14 +400,17 @@ function ShipmentsPage({ limit }: { limit?: number }) {
   const paginated = limit ? packages.slice(0, limit) : packages.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
   const totalPages = Math.max(1, Math.ceil(packages.length / PAGE_SIZE));
 
-  const handleCreate = async (data: any) => {
-    await packageService.create(data);
+  const handleCreate = async (data: any, files: File[]) => {
+    const uploadedUrls = files.length > 0 ? await uploadPackageFiles(files) : [];
+    await packageService.create({ ...data, mediaUrls: uploadedUrls });
     setCreateOpen(false);
     setRefreshKey((k) => k + 1);
   };
-  const handleUpdate = async (data: any) => {
+  const handleUpdate = async (data: any, files: File[]) => {
     if (!editPkg) return;
-    await packageService.update(editPkg.id, data);
+    const existingUrls = editPkg.mediaUrls || [];
+    const uploadedUrls = files.length > 0 ? await uploadPackageFiles(files) : [];
+    await packageService.update(editPkg.id, { ...data, mediaUrls: [...existingUrls, ...uploadedUrls] });
     setEditPkg(null);
     setRefreshKey((k) => k + 1);
   };
@@ -457,7 +465,7 @@ function ShipmentsPage({ limit }: { limit?: number }) {
               </DialogTrigger>
               <DialogContent className="w-[95vw] max-w-lg max-h-[90vh] overflow-y-auto">
                 <DialogHeader><DialogTitle>Create New Package</DialogTitle></DialogHeader>
-                <PackageForm onSubmit={handleCreate} />
+                <PackageForm onSubmit={handleCreate} isCreate={true} />
               </DialogContent>
             </Dialog>
           </div>
@@ -577,8 +585,9 @@ function ShipmentsPage({ limit }: { limit?: number }) {
 // ================= CREATE SHIPMENT =================
 function CreateShipmentPage() {
   const navigate = useNavigate();
-  const handleSubmit = async (data: any) => {
-    await packageService.create(data);
+  const handleSubmit = async (data: any, files: File[]) => {
+    const uploadedUrls = files.length > 0 ? await uploadPackageFiles(files) : [];
+    await packageService.create({ ...data, mediaUrls: uploadedUrls });
     navigate("/admin/shipments");
   };
   return (
@@ -587,7 +596,7 @@ function CreateShipmentPage() {
         <h2 className="text-2xl font-bold text-slate-900">Create New Shipment</h2>
         <p className="text-slate-500">Fill in the details to create a new package shipment</p>
       </div>
-      <Card><CardContent className="pt-6"><PackageForm onSubmit={handleSubmit} /></CardContent></Card>
+      <Card><CardContent className="pt-6"><PackageForm onSubmit={handleSubmit} isCreate={true} /></CardContent></Card>
     </div>
   );
 }
@@ -704,7 +713,9 @@ function SettingsPage() {
 }
 
 // ================= FORMS =================
-function PackageForm({ initialData, onSubmit }: { initialData?: Package; onSubmit: (data: any) => void }) {
+const LiveMap = lazy(() => import("@/components/LiveMap"));
+
+function PackageForm({ initialData, onSubmit, isCreate = false }: { initialData?: Package; onSubmit: (data: any, files: File[]) => void; isCreate?: boolean }) {
   const [formData, setFormData] = useState({
     senderName: initialData?.senderName || "",
     recipientName: initialData?.recipientName || "",
@@ -714,13 +725,45 @@ function PackageForm({ initialData, onSubmit }: { initialData?: Package; onSubmi
     description: initialData?.description || "",
     notes: initialData?.notes || "",
     fishAvatar: initialData?.fishAvatar || "express",
+    senderLat: initialData?.senderLat?.toString() || "",
+    senderLng: initialData?.senderLng?.toString() || "",
+    receiverLat: initialData?.receiverLat?.toString() || "",
+    receiverLng: initialData?.receiverLng?.toString() || "",
   });
+  const [files, setFiles] = useState<File[]>([]);
+  const [previewUrls, setPreviewUrls] = useState<string[]>(initialData?.mediaUrls || []);
+  const [showMap, setShowMap] = useState(false);
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files) return;
+    const selected = Array.from(e.target.files);
+    setFiles((prev) => [...prev, ...selected]);
+    const newPreviews = selected.map((f) => URL.createObjectURL(f));
+    setPreviewUrls((prev) => [...prev, ...newPreviews]);
+  };
+
+  const removeFile = (index: number) => {
+    setFiles((prev) => prev.filter((_, i) => i !== index));
+    setPreviewUrls((prev) => prev.filter((_, i) => i !== index));
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onSubmit({ ...formData, weight: parseFloat(formData.weight) || 0 });
+    onSubmit({
+      ...formData,
+      weight: parseFloat(formData.weight) || 0,
+      senderLat: formData.senderLat ? parseFloat(formData.senderLat) : null,
+      senderLng: formData.senderLng ? parseFloat(formData.senderLng) : null,
+      receiverLat: formData.receiverLat ? parseFloat(formData.receiverLat) : null,
+      receiverLng: formData.receiverLng ? parseFloat(formData.receiverLng) : null,
+    }, files);
   };
+
+  const parseCoord = (v: string) => (v ? parseFloat(v) : null);
+
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
+      {/* Basic Info */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div><label className="text-sm font-medium text-slate-700">Sender Name</label><Input value={formData.senderName} onChange={(e) => setFormData({ ...formData, senderName: e.target.value })} required /></div>
         <div><label className="text-sm font-medium text-slate-700">Recipient Name</label><Input value={formData.recipientName} onChange={(e) => setFormData({ ...formData, recipientName: e.target.value })} required /></div>
@@ -732,6 +775,8 @@ function PackageForm({ initialData, onSubmit }: { initialData?: Package; onSubmi
       </div>
       <div><label className="text-sm font-medium text-slate-700">Description</label><Input value={formData.description} onChange={(e) => setFormData({ ...formData, description: e.target.value })} /></div>
       <div><label className="text-sm font-medium text-slate-700">Notes</label><Input value={formData.notes} onChange={(e) => setFormData({ ...formData, notes: e.target.value })} /></div>
+
+      {/* Carrier */}
       <div>
         <label className="text-sm font-medium text-slate-700">Assigned Carrier</label>
         <Select value={formData.fishAvatar} onValueChange={(v) => setFormData({ ...formData, fishAvatar: v })}>
@@ -743,8 +788,91 @@ function PackageForm({ initialData, onSubmit }: { initialData?: Package; onSubmi
           </SelectContent>
         </Select>
       </div>
+
+      {/* Locations */}
+      <div className="border border-slate-200 rounded-lg p-4 space-y-3">
+        <div className="flex items-center gap-2">
+          <MapPin className="h-4 w-4 text-blue-700" />
+          <h3 className="text-sm font-semibold text-slate-700">Route Locations (Lat/Lng)</h3>
+          <Button type="button" variant="ghost" size="sm" className="ml-auto h-7 text-xs" onClick={() => setShowMap(!showMap)}>
+            {showMap ? "Hide Map" : "Pick on Map"}
+          </Button>
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div>
+            <label className="text-xs font-medium text-slate-500">Sender Lat</label>
+            <Input type="number" step="any" value={formData.senderLat} onChange={(e) => setFormData({ ...formData, senderLat: e.target.value })} placeholder="25.7617" />
+          </div>
+          <div>
+            <label className="text-xs font-medium text-slate-500">Sender Lng</label>
+            <Input type="number" step="any" value={formData.senderLng} onChange={(e) => setFormData({ ...formData, senderLng: e.target.value })} placeholder="-80.1918" />
+          </div>
+          <div>
+            <label className="text-xs font-medium text-slate-500">Receiver Lat</label>
+            <Input type="number" step="any" value={formData.receiverLat} onChange={(e) => setFormData({ ...formData, receiverLat: e.target.value })} placeholder="34.0522" />
+          </div>
+          <div>
+            <label className="text-xs font-medium text-slate-500">Receiver Lng</label>
+            <Input type="number" step="any" value={formData.receiverLng} onChange={(e) => setFormData({ ...formData, receiverLng: e.target.value })} placeholder="-118.2437" />
+          </div>
+        </div>
+        {showMap && (
+          <div className="h-64 rounded-lg border border-slate-200 overflow-hidden">
+            <Suspense fallback={<div className="h-full flex items-center justify-center text-slate-400 text-sm">Loading map...</div>}>
+              <LiveMap
+                status="sent"
+                senderLat={parseCoord(formData.senderLat)}
+                senderLng={parseCoord(formData.senderLng)}
+                receiverLat={parseCoord(formData.receiverLat)}
+                receiverLng={parseCoord(formData.receiverLng)}
+                editable={true}
+                onSenderChange={(lat, lng) => setFormData((prev) => ({ ...prev, senderLat: lat.toFixed(6), senderLng: lng.toFixed(6) }))}
+                onReceiverChange={(lat, lng) => setFormData((prev) => ({ ...prev, receiverLat: lat.toFixed(6), receiverLng: lng.toFixed(6) }))}
+              />
+            </Suspense>
+          </div>
+        )}
+      </div>
+
+      {/* File Upload */}
+      <div className="border border-slate-200 rounded-lg p-4 space-y-3">
+        <div className="flex items-center gap-2">
+          <Camera className="h-4 w-4 text-blue-700" />
+          <h3 className="text-sm font-semibold text-slate-700">Photos & Videos</h3>
+        </div>
+        <label className="flex items-center justify-center w-full h-20 border-2 border-dashed border-slate-300 rounded-lg cursor-pointer hover:border-blue-400 hover:bg-blue-50 transition-colors">
+          <div className="flex flex-col items-center gap-1 text-slate-400">
+            <Upload className="h-5 w-5" />
+            <span className="text-xs">Click to upload photos or videos</span>
+          </div>
+          <input type="file" accept="image/*,video/*" multiple className="hidden" onChange={handleFileChange} />
+        </label>
+
+        {/* Previews */}
+        {previewUrls.length > 0 && (
+          <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+            {previewUrls.map((url, i) => (
+              <div key={i} className="relative aspect-square rounded-lg overflow-hidden border border-slate-200 group">
+                {url.match(/\.mp4|\.webm|\.mov|data:video/) ? (
+                  <video src={url} className="w-full h-full object-cover" preload="metadata" />
+                ) : (
+                  <img src={url} alt="preview" className="w-full h-full object-cover" />
+                )}
+                <button
+                  type="button"
+                  onClick={() => removeFile(i)}
+                  className="absolute top-1 right-1 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
       <div className="pt-2 flex justify-end">
-        <Button type="submit" className="bg-blue-700 hover:bg-blue-800">{initialData ? "Update Package" : "Create Package"}</Button>
+        <Button type="submit" className="bg-blue-700 hover:bg-blue-800">{isCreate ? "Create Package" : "Update Package"}</Button>
       </div>
     </form>
   );

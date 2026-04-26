@@ -14,6 +14,8 @@ import {
   Printer,
   CheckCircle2,
   Truck,
+  Image as ImageIcon,
+  Video,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -369,22 +371,32 @@ export default function TrackingResult() {
               </Card>
             </div>
 
-            {/* Description */}
-            {(pkg.description || pkg.notes) && (
+            {/* Media Gallery */}
+            {pkg.mediaUrls && pkg.mediaUrls.length > 0 && (
               <Card className="border-slate-200">
-                <CardContent className="p-4 space-y-3">
-                  {pkg.description && (
-                    <div>
-                      <p className="text-xs text-slate-500 mb-1">Description</p>
-                      <p className="text-sm text-slate-900">{pkg.description}</p>
-                    </div>
-                  )}
-                  {pkg.notes && (
-                    <div>
-                      <p className="text-xs text-slate-500 mb-1">Notes</p>
-                      <p className="text-sm text-slate-900">{pkg.notes}</p>
-                    </div>
-                  )}
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-lg text-slate-900 flex items-center gap-2">
+                    <ImageIcon className="h-5 w-5 text-blue-700" />
+                    Package Photos & Videos
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+                    {pkg.mediaUrls.map((url, i) => (
+                      <div key={i} className="relative aspect-square rounded-lg overflow-hidden border border-slate-200 group cursor-pointer">
+                        {url.match(/\.mp4|\.webm|\.mov|data:video/) ? (
+                          <div className="relative w-full h-full">
+                            <video src={url} className="w-full h-full object-cover" preload="metadata" />
+                            <div className="absolute inset-0 bg-black/30 flex items-center justify-center">
+                              <Video className="h-6 w-6 text-white" />
+                            </div>
+                          </div>
+                        ) : (
+                          <img src={url} alt={`Package media ${i + 1}`} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                        )}
+                      </div>
+                    ))}
+                  </div>
                 </CardContent>
               </Card>
             )}
@@ -408,7 +420,13 @@ export default function TrackingResult() {
                       </div>
                     }
                   >
-                    <LiveMap status={pkg.status} />
+                    <LiveMap
+                      status={pkg.status}
+                      senderLat={pkg.senderLat}
+                      senderLng={pkg.senderLng}
+                      receiverLat={pkg.receiverLat}
+                      receiverLng={pkg.receiverLng}
+                    />
                   </Suspense>
                 </div>
               </CardContent>
