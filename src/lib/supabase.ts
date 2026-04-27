@@ -569,6 +569,10 @@ export const packageService = {
       .sort((a, b) => new Date(b.changedAt).getTime() - new Date(a.changedAt).getTime());
   },
 
+  async getCarrierLeaderboard(): Promise<LeaderboardEntry[]> {
+    return this.getLeaderboard();
+  },
+
   async getLeaderboard(): Promise<LeaderboardEntry[]> {
     const packages = await this.list();
     const history = getHistory();

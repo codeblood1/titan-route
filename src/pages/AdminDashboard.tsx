@@ -5,9 +5,9 @@ import { packageService, uploadPackageFiles, checkSupabaseHealth, type Package }
 import {
   LayoutDashboard, Package, Plus, Trophy, Settings, LogOut,
   Search, Edit, Trash2, Filter, ChevronLeft, ChevronRight,
-  X, Menu, Ship, Truck, Loader2, AlertCircle, CheckCircle2,
-  Upload, Image as ImageIcon, Video, MapPin, Camera, Shield,
-  Wifi, WifiOff,
+  X, Truck, Loader2, AlertCircle, CheckCircle2,
+  Upload, Video, MapPin, Camera, Shield,
+  WifiOff,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";

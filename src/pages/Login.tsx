@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router";
 import { useAuth } from "@/hooks/useAuth";
-import { supabase, saveRuntimeSupabaseConfig, clearRuntimeSupabaseConfig, hasRuntimeSupabaseConfig } from "@/lib/supabase";
+import { supabase, saveRuntimeSupabaseConfig, clearRuntimeSupabaseConfig, hasRuntimeSupabaseConfig, getRuntimeSupabaseUrl, checkSupabaseHealth } from "@/lib/supabase";
 import { Truck, Shield, ArrowLeft, AlertCircle, Settings, Database, Trash2, Activity } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,6 +13,8 @@ export default function Login() {
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [showConfig, setShowConfig] = useState(false);
+  const [showDiagnostics, setShowDiagnostics] = useState(false);
+  const [diagResult, setDiagResult] = useState<string>("");
   const [sbUrl, setSbUrl] = useState("");
   const [sbKey, setSbKey] = useState("");
   const [configSaved, setConfigSaved] = useState(false);
@@ -57,6 +59,24 @@ export default function Login() {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const runFullDiagnostics = async () => {
+    setShowDiagnostics(true);
+    setDiagResult("Running diagnostics...");
+    const storedUrl = getRuntimeSupabaseUrl();
+    const results: string[] = [];
+    
+    results.push(`Stored URL: ${storedUrl || "(using .env or not set)"}`);
+    results.push(`Client initialized: ${supabase ? "YES" : "NO"}`);
+    
+    if (supabase) {
+      const health = await checkSupabaseHealth();
+      results.push(`Health check: ${health.ok ? "OK" : "FAILED"} (${health.ms}ms)`);
+      if (health.error) results.push(`Error: ${health.error}`);
+    }
+    
+    setDiagResult(results.join("\n"));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -273,6 +293,27 @@ export default function Login() {
                     </>
                   )}
                 </form>
+              )}
+            </div>
+
+            {/* Full Diagnostics */}
+            <div className="mt-4 pt-4 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => { setShowDiagnostics((s) => !s); if (!showDiagnostics) runFullDiagnostics(); }}
+                className="flex items-center gap-2 text-xs text-slate-500 hover:text-blue-700 transition-colors w-full justify-center"
+              >
+                <Activity className="h-3.5 w-3.5" />
+                {showDiagnostics ? "Hide Diagnostics" : "Show Full Diagnostics"}
+              </button>
+              {showDiagnostics && (
+                <div className="mt-3 p-3 bg-slate-50 border border-slate-200 rounded-lg">
+                  <pre className="text-[10px] text-slate-600 whitespace-pre-wrap font-mono">{diagResult}</pre>
+                  <Button size="sm" variant="outline" className="mt-2 text-xs w-full" onClick={runFullDiagnostics} disabled={isLoading}>
+                    <Activity className="h-3 w-3 mr-1" />
+                    Re-run Diagnostics
+                  </Button>
+                </div>
               )}
             </div>
 

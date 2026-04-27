@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from "react";
 import L from "leaflet";
-import { Upload } from "lucide-react";
 
 interface LiveMapProps {
   status: string;
