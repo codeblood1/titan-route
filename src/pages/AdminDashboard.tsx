@@ -467,6 +467,7 @@ function ShipmentsPage() {
   useEffect(() => {
     let cancelled = false;
     async function load() {
+      setLoading(true);
       setLoadError("");
       try {
         const data = await packageService.getAll();
@@ -602,7 +603,15 @@ function ShipmentsPage() {
                   </TableRow></TableHeader>
                   <TableBody>
                     {paginated.length === 0 ? (
-                      <TableRow><TableCell colSpan={7} className="text-center py-8 text-slate-500">No packages found.</TableCell></TableRow>
+                      <TableRow><TableCell colSpan={7} className="text-center py-8">
+                        <p className="text-slate-500 mb-1">No packages found.</p>
+                        <p className="text-xs text-slate-400 max-w-md mx-auto">
+                          If packages exist in Supabase but don't show here, RLS policies may be blocking SELECT. Run in SQL Editor:
+                        </p>
+                        <code className="block mt-2 text-[10px] bg-slate-100 rounded px-2 py-1 font-mono text-slate-600">
+                          SELECT * FROM pg_policies WHERE tablename = 'packages';
+                        </code>
+                      </TableCell></TableRow>
                     ) : (
                       paginated.map((pkg) => {
                         const carrier = CARRIER_AVATARS.find((f) => f.id === pkg.fishAvatar) || CARRIER_AVATARS[0];

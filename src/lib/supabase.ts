@@ -399,6 +399,7 @@ export const packageService = {
         query = query.eq("status", filters.status);
       }
       const { data, error } = await withTimeout(query, 15000, "Package list");
+      console.log("[packageService.list] Supabase response:", { rowCount: data?.length ?? 0, error: error?.message || null });
       if (error) throw error;
       return (data || []).map(mapFromSupabasePackage);
     }
