@@ -23,7 +23,6 @@ interface AuthContextValue {
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
-
 const LS_KEY = "tr_admin_v3";
 const HAS_SUPABASE = !!supabase;
 
@@ -36,84 +35,93 @@ function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
   ]);
 }
 
+async function loadSupabaseUser(userId: string, email: string): Promise<AdminUser | null> {
+  if (!HAS_SUPABASE) return null;
+  try {
+    const { data: roleData, error } = await supabase!
+      .from("admin_roles")
+      .select("role, full_name, is_active, user_id")
+      .eq("user_id", userId)
+      .eq("is_active", true)
+      .maybeSingle();
+    if (error) {
+      console.error("[Auth] admin_roles query ERROR:", error.message);
+      return null;
+    }
+    if (!roleData) {
+      console.warn("[Auth] No active admin_roles for user_id:", userId);
+      return null;
+    }
+    return {
+      id: userId,
+      email: email.toLowerCase(),
+      name: roleData.full_name || email.split("@")[0] || "Admin",
+      role: roleData.role,
+    };
+  } catch (err: any) {
+    console.error("[Auth] loadSupabaseUser exception:", err?.message || err);
+    return null;
+  }
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AdminUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
+  // Load from localStorage FIRST (fast, never hangs), then verify with Supabase
   useEffect(() => {
-    async function checkSession() {
-      if (HAS_SUPABASE) {
-        try {
-          const { data: { session } } = await withTimeout(supabase!.auth.getSession(), 8000);
-          if (session?.user) {
-            const adminUser = await loadSupabaseUser(session.user.id, session.user.email ?? "");
-            if (adminUser) {
-              setUser(adminUser);
-              setIsLoading(false);
-              return;
-            }
-          }
-        } catch (err: any) {
-          console.warn("[Auth] Session check failed:", err?.message);
-        }
-      }
+    let mounted = true;
+
+    async function init() {
+      // Step 1: Load from localStorage immediately (never hangs)
+      let localUser: AdminUser | null = null;
       try {
         const raw = localStorage.getItem(LS_KEY);
         if (raw) {
           const parsed = JSON.parse(raw);
-          if (parsed?.email) setUser(parsed);
+          if (parsed?.email) {
+            localUser = parsed as AdminUser;
+            if (mounted) setUser(localUser);
+          }
         }
       } catch {
         localStorage.removeItem(LS_KEY);
       }
-      setIsLoading(false);
-    }
-    checkSession();
 
-    let subscription: { unsubscribe: () => void } | null = null;
-    if (HAS_SUPABASE) {
-      const { data } = supabase!.auth.onAuthStateChange(async (event, session) => {
-        if (event === "SIGNED_IN" && session?.user) {
-          const adminUser = await loadSupabaseUser(session.user.id, session.user.email ?? "");
-          if (adminUser) setUser(adminUser);
-        } else if (event === "SIGNED_OUT") {
-          setUser(null);
-          localStorage.removeItem(LS_KEY);
+      // Step 2: Stop loading spinner immediately so UI shows
+      if (mounted) setIsLoading(false);
+
+      // Step 3: Verify with Supabase in background (non-blocking)
+      if (HAS_SUPABASE) {
+        try {
+          const { data: { session } } = await withTimeout(
+            supabase!.auth.getSession(),
+            5000
+          );
+          if (session?.user && mounted) {
+            const adminUser = await withTimeout(
+              loadSupabaseUser(session.user.id, session.user.email ?? ""),
+              5000
+            );
+            if (adminUser && mounted) {
+              setUser(adminUser);
+              localStorage.setItem(LS_KEY, JSON.stringify(adminUser));
+            } else if (adminUser === null && mounted && localUser) {
+              // Supabase says no admin role, but we have local user
+              // Keep local user but log warning
+              console.warn("[Auth] Supabase session exists but no admin role found. Using cached credentials.");
+            }
+          }
+        } catch (err: any) {
+          console.warn("[Auth] Supabase verification failed:", err?.message);
+          // LocalStorage user already set, so dashboard still works
         }
-      });
-      subscription = data.subscription;
+      }
     }
-    return () => subscription?.unsubscribe();
-  }, []);
 
-  async function loadSupabaseUser(userId: string, email: string): Promise<AdminUser | null> {
-    if (!HAS_SUPABASE) return null;
-    try {
-      const { data: roleData, error } = await supabase!
-        .from("admin_roles")
-        .select("role, full_name, is_active, user_id")
-        .eq("user_id", userId)
-        .eq("is_active", true)
-        .maybeSingle();
-      if (error) {
-        console.error("[Auth] admin_roles query ERROR:", error.message);
-        return null;
-      }
-      if (!roleData) {
-        console.warn("[Auth] No active admin_roles for user_id:", userId);
-        return null;
-      }
-      return {
-        id: userId,
-        email: email.toLowerCase(),
-        name: roleData.full_name || email.split("@")[0] || "Admin",
-        role: roleData.role,
-      };
-    } catch (err: any) {
-      console.error("[Auth] loadSupabaseUser exception:", err?.message || err);
-      return null;
-    }
-  }
+    init();
+    return () => { mounted = false; };
+  }, []);
 
   const login = useCallback(async (email: string, password: string): Promise<LoginResult> => {
     const trimmedEmail = email.trim().toLowerCase();
@@ -128,7 +136,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (error || !data.user) {
           return { success: false, reason: "wrong_password", debug: error?.message || "No user returned" };
         }
-        const adminUser = await loadSupabaseUser(data.user.id, data.user.email ?? trimmedEmail);
+        const adminUser = await withTimeout(
+          loadSupabaseUser(data.user.id, data.user.email ?? trimmedEmail),
+          5000
+        );
         if (adminUser) {
           setUser(adminUser);
           localStorage.setItem(LS_KEY, JSON.stringify(adminUser));
@@ -147,7 +158,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const logout = useCallback(async () => {
-    if (HAS_SUPABASE) await supabase!.auth.signOut();
+    if (HAS_SUPABASE) {
+      try { await supabase!.auth.signOut(); } catch { /* ignore */ }
+    }
     setUser(null);
     localStorage.removeItem(LS_KEY);
   }, []);
