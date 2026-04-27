@@ -192,10 +192,10 @@ export default function TrackingResult() {
                 </CardHeader>
                 <CardContent className="pt-0">
                   <p className="font-semibold text-slate-900">{pkg.senderName}</p>
-                  <p className="text-sm text-slate-500 mt-1">{pkg.address}</p>
+                  <p className="text-sm text-slate-500 mt-1">{pkg.senderAddress || pkg.address}</p>
                   <p className="text-sm text-slate-500 flex items-center gap-1 mt-2">
                     <Phone className="h-3.5 w-3.5" />
-                    {pkg.phone}
+                    {pkg.senderPhone || pkg.phone}
                   </p>
                 </CardContent>
               </Card>
@@ -387,15 +387,15 @@ export default function TrackingResult() {
                       <tbody>
                         <tr className="border-t border-slate-100">
                           <td className="px-3 py-2 text-slate-700">Shipping ({pkg.weight} kg)</td>
-                          <td className="px-3 py-2 text-right font-medium text-slate-900">${(pkg.weight * 12).toFixed(2)}</td>
+                          <td className="px-3 py-2 text-right font-medium text-slate-900">${(pkg.shippingCost || 0).toFixed(2)}</td>
                         </tr>
                         <tr className="border-t border-slate-100">
                           <td className="px-3 py-2 text-slate-700">Clearance Fee</td>
-                          <td className="px-3 py-2 text-right font-medium text-slate-900">${(pkg.weight * 3).toFixed(2)}</td>
+                          <td className="px-3 py-2 text-right font-medium text-slate-900">${(pkg.clearanceFee || 0).toFixed(2)}</td>
                         </tr>
                         <tr className="border-t border-slate-100 bg-slate-50">
                           <td className="px-3 py-2 font-semibold text-slate-900">Total</td>
-                          <td className="px-3 py-2 text-right font-bold text-blue-700">${(pkg.weight * 15).toFixed(2)}</td>
+                          <td className="px-3 py-2 text-right font-bold text-blue-700">${((pkg.shippingCost || 0) + (pkg.clearanceFee || 0)).toFixed(2)}</td>
                         </tr>
                       </tbody>
                     </table>

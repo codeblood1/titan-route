@@ -168,6 +168,8 @@ function PackageForm({
   const [formData, setFormData] = useState({
     senderName: initialData?.senderName || "",
     recipientName: initialData?.recipientName || "",
+    senderAddress: initialData?.senderAddress || "",
+    senderPhone: initialData?.senderPhone || "",
     address: initialData?.address || "",
     phone: initialData?.phone || "",
     weight: initialData?.weight?.toString() || "",
@@ -178,6 +180,8 @@ function PackageForm({
     senderLng: initialData?.senderLng?.toString() || "",
     receiverLat: initialData?.receiverLat?.toString() || "",
     receiverLng: initialData?.receiverLng?.toString() || "",
+    shippingCost: initialData?.shippingCost?.toString() || "",
+    clearanceFee: initialData?.clearanceFee?.toString() || "",
   });
   const [newFiles, setNewFiles] = useState<File[]>([]);
   const [newPreviews, setNewPreviews] = useState<string[]>([]);
@@ -214,6 +218,8 @@ function PackageForm({
         senderLng: formData.senderLng ? parseFloat(formData.senderLng) : null,
         receiverLat: formData.receiverLat ? parseFloat(formData.receiverLat) : null,
         receiverLng: formData.receiverLng ? parseFloat(formData.receiverLng) : null,
+        shippingCost: parseFloat(formData.shippingCost) || 0,
+        clearanceFee: parseFloat(formData.clearanceFee) || 0,
       },
       newFiles,
       existingMedia
@@ -228,25 +234,31 @@ function PackageForm({
         <div><label className="text-sm font-medium text-slate-700">Sender Name</label><Input value={formData.senderName} onChange={(e) => setFormData({ ...formData, senderName: e.target.value })} required /></div>
         <div><label className="text-sm font-medium text-slate-700">Recipient Name</label><Input value={formData.recipientName} onChange={(e) => setFormData({ ...formData, recipientName: e.target.value })} required /></div>
       </div>
-      <div><label className="text-sm font-medium text-slate-700">Address</label><Input value={formData.address} onChange={(e) => setFormData({ ...formData, address: e.target.value })} required /></div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <div><label className="text-sm font-medium text-slate-700">Phone</label><Input value={formData.phone} onChange={(e) => setFormData({ ...formData, phone: e.target.value })} required /></div>
+        <div><label className="text-sm font-medium text-slate-700">Sender Address</label><Input value={formData.senderAddress} onChange={(e) => setFormData({ ...formData, senderAddress: e.target.value })} required /></div>
+        <div><label className="text-sm font-medium text-slate-700">Receiver Address</label><Input value={formData.address} onChange={(e) => setFormData({ ...formData, address: e.target.value })} required /></div>
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div><label className="text-sm font-medium text-slate-700">Sender Phone</label><Input value={formData.senderPhone} onChange={(e) => setFormData({ ...formData, senderPhone: e.target.value })} required /></div>
+        <div><label className="text-sm font-medium text-slate-700">Receiver Phone</label><Input value={formData.phone} onChange={(e) => setFormData({ ...formData, phone: e.target.value })} required /></div>
+      </div>
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <div><label className="text-sm font-medium text-slate-700">Weight (kg)</label><Input type="number" step="0.01" value={formData.weight} onChange={(e) => setFormData({ ...formData, weight: e.target.value })} required /></div>
+        <div><label className="text-sm font-medium text-slate-700">Shipping Cost ($)</label><Input type="number" step="0.01" value={formData.shippingCost} onChange={(e) => setFormData({ ...formData, shippingCost: e.target.value })} required /></div>
+        <div><label className="text-sm font-medium text-slate-700">Clearance Fee ($)</label><Input type="number" step="0.01" value={formData.clearanceFee} onChange={(e) => setFormData({ ...formData, clearanceFee: e.target.value })} required /></div>
+        <div><label className="text-sm font-medium text-slate-700">Assigned Carrier</label>
+          <Select value={formData.fishAvatar} onValueChange={(v) => setFormData({ ...formData, fishAvatar: v })}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {CARRIER_AVATARS.map((c) => (
+                <SelectItem key={c.id} value={c.id}><span className="flex items-center gap-2"><span>{c.emoji}</span>{c.name}</span></SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
       </div>
       <div><label className="text-sm font-medium text-slate-700">Description</label><Input value={formData.description} onChange={(e) => setFormData({ ...formData, description: e.target.value })} /></div>
       <div><label className="text-sm font-medium text-slate-700">Notes</label><Input value={formData.notes} onChange={(e) => setFormData({ ...formData, notes: e.target.value })} /></div>
-
-      <div>
-        <label className="text-sm font-medium text-slate-700">Assigned Carrier</label>
-        <Select value={formData.fishAvatar} onValueChange={(v) => setFormData({ ...formData, fishAvatar: v })}>
-          <SelectTrigger><SelectValue /></SelectTrigger>
-          <SelectContent>
-            {CARRIER_AVATARS.map((c) => (
-              <SelectItem key={c.id} value={c.id}><span className="flex items-center gap-2"><span>{c.emoji}</span>{c.name}</span></SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
 
       {/* Locations */}
       <div className="border border-slate-200 rounded-lg p-4 space-y-3">
@@ -520,8 +532,10 @@ function ShipmentsPage() {
     if (!editPkg) return;
     setFormError(""); setIsSubmitting(true);
     try {
-      const { urls, errors } = files.length > 0 ? await uploadPackageFiles(files) : { urls: [], errors: [] };
-      if (errors.length > 0) setFormError("Upload warnings: " + errors.join("; "));
+      let urls: string[] = [];
+      if (files.length > 0) {
+        urls = await uploadPackageFiles(files);
+      }
       await packageService.update(editPkg.id, { ...data, mediaUrls: [...keepMediaUrls, ...urls] });
       setEditPkg(null); setRefreshKey((k) => k + 1);
     } catch (err: any) {

@@ -29,6 +29,10 @@ export interface Package {
   senderLng: number | null;
   receiverLat: number | null;
   receiverLng: number | null;
+  senderAddress: string;
+  senderPhone: string;
+  shippingCost: number;
+  clearanceFee: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -188,6 +192,10 @@ function mapFromSupabasePackage(row: Record<string, unknown>): Package {
     senderLng: row.sender_lng != null ? Number(row.sender_lng) : null,
     receiverLat: row.receiver_lat != null ? Number(row.receiver_lat) : null,
     receiverLng: row.receiver_lng != null ? Number(row.receiver_lng) : null,
+    senderAddress: row.sender_address ? String(row.sender_address) : "",
+    senderPhone: row.sender_phone ? String(row.sender_phone) : "",
+    shippingCost: row.shipping_cost != null ? Number(row.shipping_cost) : 0,
+    clearanceFee: row.clearance_fee != null ? Number(row.clearance_fee) : 0,
     createdAt: String(row.created_at),
     updatedAt: String(row.updated_at),
   };
@@ -212,6 +220,10 @@ function mapToSupabasePackage(pkg: Package): Record<string, unknown> {
     sender_lng: pkg.senderLng,
     receiver_lat: pkg.receiverLat,
     receiver_lng: pkg.receiverLng,
+    sender_address: pkg.senderAddress,
+    sender_phone: pkg.senderPhone,
+    shipping_cost: pkg.shippingCost,
+    clearance_fee: pkg.clearanceFee,
     created_at: pkg.createdAt,
     updated_at: pkg.updatedAt,
   };
@@ -235,6 +247,10 @@ function mapToSupabasePackageUpdate(data: Partial<Package>): Record<string, unkn
   if (data.senderLng !== undefined) result.sender_lng = data.senderLng;
   if (data.receiverLat !== undefined) result.receiver_lat = data.receiverLat;
   if (data.receiverLng !== undefined) result.receiver_lng = data.receiverLng;
+  if (data.senderAddress !== undefined) result.sender_address = data.senderAddress;
+  if (data.senderPhone !== undefined) result.sender_phone = data.senderPhone;
+  if (data.shippingCost !== undefined) result.shipping_cost = data.shippingCost;
+  if (data.clearanceFee !== undefined) result.clearance_fee = data.clearanceFee;
   result.updated_at = now();
   return result;
 }
@@ -421,6 +437,16 @@ export const packageService = {
         console.warn("[packageService.create] Insert succeeded but no rows returned. RLS may be blocking SELECT after INSERT.");
         return pkg;
       }
+      // Insert initial history entry
+      const historyEntry = {
+        id: generateId(),
+        package_id: pkg.id,
+        status: "order_confirmed",
+        reason: null,
+        changed_by: "Admin",
+        changed_at: now(),
+      };
+      await supabase.from("package_history").insert(historyEntry).then(() => {}, (e) => console.error("[create] history insert error:", e));
       return mapFromSupabasePackage(insertedRows[0]);
     }
 
@@ -509,6 +535,16 @@ export const packageService = {
       );
       if (error) throw error;
       if (!updatedRows || updatedRows.length === 0) throw new Error("Update succeeded but no rows returned");
+      // Insert history entry
+      const historyEntry = {
+        id: generateId(),
+        package_id: id,
+        status,
+        reason: reason || null,
+        changed_by: "Admin",
+        changed_at: now(),
+      };
+      await supabase.from("package_history").insert(historyEntry).then(() => {}, (e) => console.error("[updateStatus] history insert error:", e));
       return mapFromSupabasePackage(updatedRows[0]);
     }
 
@@ -583,6 +619,8 @@ function seedIfEmpty() {
       fishAvatar: "express", status: "delivered", customStatusReason: null,
       mediaUrls: [],
       senderLat: 25.7617, senderLng: -80.1918, receiverLat: 34.0522, receiverLng: -118.2437,
+      senderAddress: "456 Sender St, New York, NY", senderPhone: "+1 555-0199",
+      shippingCost: 30.00, clearanceFee: 7.50,
       createdAt: new Date(Date.now() - 86400000 * 3).toISOString(),
       updatedAt: new Date(Date.now() - 86400000).toISOString(),
     },
@@ -594,6 +632,8 @@ function seedIfEmpty() {
       fishAvatar: "voyager", status: "on_the_way", customStatusReason: null,
       mediaUrls: [],
       senderLat: 47.6062, senderLng: -122.3321, receiverLat: 40.7128, receiverLng: -74.006,
+      senderAddress: "789 Shipper Ave, Portland, OR", senderPhone: "+1 555-0299",
+      shippingCost: 21.60, clearanceFee: 5.40,
       createdAt: new Date(Date.now() - 86400000 * 2).toISOString(),
       updatedAt: new Date(Date.now() - 86400000).toISOString(),
     },
@@ -605,6 +645,8 @@ function seedIfEmpty() {
       fishAvatar: "sky", status: "picked_by_courier", customStatusReason: null,
       mediaUrls: [],
       senderLat: 32.7157, senderLng: -117.1611, receiverLat: 37.7749, receiverLng: -122.4194,
+      senderAddress: "321 Depot Ln, Los Angeles, CA", senderPhone: "+1 555-0399",
+      shippingCost: 62.40, clearanceFee: 15.60,
       createdAt: new Date(Date.now() - 86400000).toISOString(),
       updatedAt: new Date(Date.now() - 86400000).toISOString(),
     },
@@ -616,6 +658,8 @@ function seedIfEmpty() {
       fishAvatar: "trail", status: "held_by_customs", customStatusReason: "Missing customs declaration form",
       mediaUrls: [],
       senderLat: 42.3601, senderLng: -71.0589, receiverLat: 25.7617, receiverLng: -80.1918,
+      senderAddress: "654 Dock Rd, Philadelphia, PA", senderPhone: "+1 555-0499",
+      shippingCost: 9.60, clearanceFee: 2.40,
       createdAt: new Date(Date.now() - 86400000 * 4).toISOString(),
       updatedAt: new Date(Date.now() - 86400000 * 2).toISOString(),
     },
@@ -627,6 +671,8 @@ function seedIfEmpty() {
       fishAvatar: "swift", status: "order_confirmed", customStatusReason: null,
       mediaUrls: [],
       senderLat: 27.9506, senderLng: -82.4572, receiverLat: 33.4484, receiverLng: -112.0740,
+      senderAddress: "987 Cargo Blvd, Orlando, FL", senderPhone: "+1 555-0599",
+      shippingCost: 36.00, clearanceFee: 9.00,
       createdAt: new Date(Date.now() - 86400000 * 5).toISOString(),
       updatedAt: new Date(Date.now() - 86400000 * 3).toISOString(),
     },
