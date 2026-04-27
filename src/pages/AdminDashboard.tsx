@@ -279,7 +279,7 @@ function PackageForm({
           <div className="h-64 rounded-lg border border-slate-200 overflow-hidden">
             <Suspense fallback={<div className="h-full flex items-center justify-center text-slate-400 text-sm">Loading map...</div>}>
               <LiveMap
-                status="sent"
+                status="order_confirmed"
                 senderLat={parseCoord(formData.senderLat)}
                 senderLng={parseCoord(formData.senderLng)}
                 receiverLat={parseCoord(formData.receiverLat)}
@@ -388,8 +388,7 @@ function DashboardOverview() {
         const delivered = allPackages.filter((p) => p.status === "delivered").length;
         const inTransit = allPackages.filter((p) => p.status === "picked_by_courier" || p.status === "on_the_way").length;
         const held = allPackages.filter((p) => p.status === "held_by_customs").length;
-        const canceled = allPackages.filter((p) => p.status === "canceled").length;
-        setStats({ total_shipments: allPackages.length, delivered, in_transit: inTransit, held_customs: held, canceled });
+        setStats({ total_shipments: allPackages.length, delivered, in_transit: inTransit, held_customs: held });
         setRecent(allPackages.slice(0, 5));
       } finally {
         if (!cancelled) setLoading(false);
