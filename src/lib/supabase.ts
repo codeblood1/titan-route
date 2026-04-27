@@ -373,16 +373,27 @@ export const packageService = {
   },
 
   async getByTrackingCode(code: string): Promise<Package | null> {
+    const searchCode = code.toUpperCase().trim();
+    console.log("[getByTrackingCode] Searching for:", searchCode);
     if (!USE_LOCAL && supabase) {
-      const { data, error } = await supabase
-        .from("packages")
-        .select("*")
-        .eq("tracking_code", code.toUpperCase())
-        .maybeSingle();
-      if (error || !data) return null;
+      const { data, error } = await withTimeout(
+        supabase.from("packages").select("*").eq("tracking_code", searchCode).maybeSingle(),
+        15000,
+        "getByTrackingCode"
+      );
+      console.log("[getByTrackingCode] Supabase result:", { found: !!data, error: error?.message || null });
+      if (error) {
+        console.error("[getByTrackingCode] query error:", error.message, error.code);
+        throw new Error(`Database query failed: ${error.message}`);
+      }
+      if (!data) return null;
       return mapFromSupabasePackage(data);
     }
-    return getPackages().find((p) => p.trackingCode === code.toUpperCase()) || null;
+    const localPkgs = getPackages();
+    console.log("[getByTrackingCode] local packages count:", localPkgs.length);
+    const found = localPkgs.find((p) => p.trackingCode === searchCode) || null;
+    console.log("[getByTrackingCode] local match:", !!found);
+    return found;
   },
 
   async create(data: Omit<Package, "id" | "trackingCode" | "createdAt" | "updatedAt" | "status">): Promise<Package> {

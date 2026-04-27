@@ -72,7 +72,8 @@ export default function TrackingResult() {
           <CardContent className="p-8 text-center">
             <Package className="h-12 w-12 text-slate-400 mx-auto mb-4" />
             <h2 className="text-xl font-bold text-slate-900 mb-2">Tracking Not Found</h2>
-            <p className="text-slate-500 mb-4">{error || "The tracking code you entered could not be found."}</p>
+            <p className="text-sm text-slate-500 mb-2">{error || "The tracking code you entered could not be found."}</p>
+            <p className="text-xs text-slate-400 mb-4">Open browser DevTools (F12) → Console to see detailed query logs.</p>
             <Button className="bg-blue-700 hover:bg-blue-800" onClick={() => navigate("/")}>Track Another</Button>
           </CardContent>
         </Card>
