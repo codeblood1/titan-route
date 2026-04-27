@@ -499,7 +499,8 @@ function ShipmentsPage() {
   const handleCreate = async (data: any, files: File[]) => {
     setFormError(""); setIsSubmitting(true);
     try {
-      const urls = files.length > 0 ? await uploadPackageFiles(files) : [];
+      const { urls, errors } = files.length > 0 ? await uploadPackageFiles(files) : { urls: [], errors: [] };
+      if (errors.length > 0) setFormError("Upload warnings: " + errors.join("; "));
       await packageService.create({ ...data, mediaUrls: urls });
       setCreateOpen(false); setRefreshKey((k) => k + 1);
     } catch (err: any) {
@@ -704,7 +705,8 @@ function CreateShipmentPage() {
   const handleSubmit = async (data: any, files: File[]) => {
     setFormError(""); setIsSubmitting(true);
     try {
-      const urls = files.length > 0 ? await uploadPackageFiles(files) : [];
+      const { urls, errors } = files.length > 0 ? await uploadPackageFiles(files) : { urls: [], errors: [] };
+      if (errors.length > 0) setFormError("Upload warnings: " + errors.join("; "));
       await packageService.create({ ...data, mediaUrls: urls });
       navigate("/admin/shipments");
     } catch (err: any) {
