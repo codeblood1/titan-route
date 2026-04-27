@@ -458,6 +458,22 @@ export const packageService = {
     return packages[idx];
   },
 
+  async getHistory(packageId: string): Promise<PackageHistory[]> {
+    if (!USE_LOCAL && supabase) {
+      const { data, error } = await withTimeout(
+        supabase.from("package_history").select("*").eq("package_id", packageId).order("changed_at", { ascending: true }),
+        15000,
+        "Package history"
+      );
+      if (error) {
+        console.error("[packageService.getHistory] error:", error.message);
+        return [];
+      }
+      return (data || []).map(mapFromSupabaseHistory);
+    }
+    return getHistory().filter((h) => h.packageId === packageId).sort((a, b) => new Date(a.changedAt).getTime() - new Date(b.changedAt).getTime());
+  },
+
   async delete(id: string): Promise<void> {
     if (!USE_LOCAL && supabase) {
       const { error } = await withTimeout(
