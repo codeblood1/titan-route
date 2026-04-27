@@ -460,6 +460,7 @@ function ShipmentsPage() {
   const [formError, setFormError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [loadError, setLoadError] = useState("");
+  const [newStatus, setNewStatus] = useState("");
   const [statusReason, setStatusReason] = useState("");
   const PAGE_SIZE = 10;
 
