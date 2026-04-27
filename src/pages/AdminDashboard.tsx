@@ -31,19 +31,19 @@ const CARRIER_AVATARS = [
 ];
 
 const STATUS_COLORS: Record<string, string> = {
-  sent: "bg-blue-600",
-  received: "bg-amber-500",
+  order_confirmed: "bg-blue-600",
+  picked_by_courier: "bg-blue-500",
+  on_the_way: "bg-slate-500",
+  held_by_customs: "bg-amber-500",
   delivered: "bg-emerald-600",
-  canceled: "bg-red-500",
-  held_by_customs: "bg-purple-500",
 };
 
 const STATUS_LABELS: Record<string, string> = {
-  sent: "Sent",
-  received: "In Transit",
+  order_confirmed: "Order Confirmed",
+  picked_by_courier: "Picked by Courier",
+  on_the_way: "On the Way",
+  held_by_customs: "Custom Hold",
   delivered: "Delivered",
-  canceled: "Canceled",
-  held_by_customs: "Held by Customs",
 };
 
 // ============== ERROR BOUNDARY ==============
@@ -386,7 +386,7 @@ function DashboardOverview() {
         ]);
         if (cancelled) return;
         const delivered = allPackages.filter((p) => p.status === "delivered").length;
-        const inTransit = allPackages.filter((p) => p.status === "sent" || p.status === "received").length;
+        const inTransit = allPackages.filter((p) => p.status === "picked_by_courier" || p.status === "on_the_way").length;
         const held = allPackages.filter((p) => p.status === "held_by_customs").length;
         const canceled = allPackages.filter((p) => p.status === "canceled").length;
         setStats({ total_shipments: allPackages.length, delivered, in_transit: inTransit, held_customs: held, canceled });
@@ -499,8 +499,7 @@ function ShipmentsPage() {
   const handleCreate = async (data: any, files: File[]) => {
     setFormError(""); setIsSubmitting(true);
     try {
-      const { urls, errors } = files.length > 0 ? await uploadPackageFiles(files) : { urls: [], errors: [] };
-      if (errors.length > 0) setFormError("Upload warnings: " + errors.join("; "));
+      const urls = files.length > 0 ? await uploadPackageFiles(files) : [];
       await packageService.create({ ...data, mediaUrls: urls });
       setCreateOpen(false); setRefreshKey((k) => k + 1);
     } catch (err: any) {
@@ -577,11 +576,11 @@ function ShipmentsPage() {
               <SelectTrigger className="w-full sm:w-44"><Filter className="h-4 w-4 mr-2 text-slate-400" /><SelectValue placeholder="All Statuses" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Statuses</SelectItem>
-                <SelectItem value="sent">Sent</SelectItem>
-                <SelectItem value="received">Received</SelectItem>
+                <SelectItem value="order_confirmed">Order Confirmed</SelectItem>
+                <SelectItem value="picked_by_courier">Picked by Courier</SelectItem>
+                <SelectItem value="on_the_way">On the Way</SelectItem>
+                <SelectItem value="held_by_customs">Custom Hold</SelectItem>
                 <SelectItem value="delivered">Delivered</SelectItem>
-                <SelectItem value="held_by_customs">Held by Customs</SelectItem>
-                <SelectItem value="canceled">Canceled</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -669,11 +668,11 @@ function ShipmentsPage() {
             <Select value={newStatus} onValueChange={setNewStatus}>
               <SelectTrigger><SelectValue placeholder="Select new status" /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="sent">Sent</SelectItem>
-                <SelectItem value="received">Received</SelectItem>
+                <SelectItem value="order_confirmed">Order Confirmed</SelectItem>
+                <SelectItem value="picked_by_courier">Picked by Courier</SelectItem>
+                <SelectItem value="on_the_way">On the Way</SelectItem>
+                <SelectItem value="held_by_customs">Custom Hold</SelectItem>
                 <SelectItem value="delivered">Delivered</SelectItem>
-                <SelectItem value="held_by_customs">Held by Customs</SelectItem>
-                <SelectItem value="canceled">Canceled</SelectItem>
               </SelectContent>
             </Select>
             <Input placeholder="Reason (optional)" value={statusReason} onChange={(e) => setStatusReason(e.target.value)} />
@@ -705,8 +704,7 @@ function CreateShipmentPage() {
   const handleSubmit = async (data: any, files: File[]) => {
     setFormError(""); setIsSubmitting(true);
     try {
-      const { urls, errors } = files.length > 0 ? await uploadPackageFiles(files) : { urls: [], errors: [] };
-      if (errors.length > 0) setFormError("Upload warnings: " + errors.join("; "));
+      const urls = files.length > 0 ? await uploadPackageFiles(files) : [];
       await packageService.create({ ...data, mediaUrls: urls });
       navigate("/admin/shipments");
     } catch (err: any) {

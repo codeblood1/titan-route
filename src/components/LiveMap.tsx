@@ -44,11 +44,11 @@ function interpolatePoint(
 
 function getStatusFraction(status: string): number {
   switch (status) {
-    case "sent": return 0.15;
-    case "held_by_customs": return 0.35;
-    case "received": return 0.65;
+    case "order_confirmed": return 0;
+    case "picked_by_courier": return 0.15;
+    case "on_the_way": return 0.5;
+    case "held_by_customs": return 0.7;
     case "delivered": return 1;
-    case "canceled": return 0.1;
     default: return 0.15;
   }
 }
