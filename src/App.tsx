@@ -13,7 +13,7 @@ export default function App() {
   return (
     <Routes>
       <Route path="/" element={<Track />} />
-      <Route path="/track/:trackingCode" element={<TrackingResult />} />
+      <Route path="/track/:code" element={<TrackingResult />} />
       <Route path="/about" element={<About />} />
       <Route path="/services" element={<Services />} />
       <Route path="/contact" element={<Contact />} />

@@ -25,6 +25,22 @@ const STATUS_ORDER = ["order_confirmed", "picked_by_courier", "on_the_way", "hel
 export default function TrackingResult() {
   const { code } = useParams<{ code: string }>();
   const navigate = useNavigate();
+
+  // Redirect to search page if no tracking code provided
+  if (!code || code.trim() === "") {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center px-4">
+        <Card className="max-w-md w-full">
+          <CardContent className="p-8 text-center">
+            <Package className="h-12 w-12 text-slate-400 mx-auto mb-4" />
+            <h2 className="text-xl font-bold text-slate-900 mb-2">No Tracking Code</h2>
+            <p className="text-slate-500 mb-4">Enter a tracking code to view shipment details.</p>
+            <Button className="bg-blue-700 hover:bg-blue-800" onClick={() => navigate("/")}>Go to Search</Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
   const [pkg, setPkg] = useState<Package | null>(null);
   const [history, setHistory] = useState<PackageHistory[]>([]);
   const [loading, setLoading] = useState(true);
