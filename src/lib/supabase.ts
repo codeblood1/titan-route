@@ -385,6 +385,10 @@ function seedData() {
 
 // Package service
 export const packageService = {
+  async getAll(): Promise<Package[]> {
+    return this.list();
+  },
+
   async list(filters?: { search?: string; status?: string }): Promise<Package[]> {
     if (!USE_LOCAL && supabase) {
       let query = supabase.from("packages").select("*").order("created_at", { ascending: false });
