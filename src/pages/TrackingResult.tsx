@@ -1,16 +1,19 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, lazy, Suspense } from "react";
 import { useParams, useNavigate } from "react-router";
 import { packageService } from "@/lib/supabase";
 import type { Package, PackageHistory } from "@/lib/supabase";
-import LiveMap from "@/components/LiveMap";
+import MediaLightbox from "@/components/MediaLightbox";
 import {
-  ArrowLeft, Package, MapPin, Phone, User, Weight, Clock,
+  ArrowLeft, Package, MapPin, Phone, Weight, Clock,
   CheckCircle2, Printer, Truck, ClipboardCheck, Box, AlertTriangle,
-  Home, Image as ImageIcon, Video, X,
+  Home, Image as ImageIcon, Video, X, Calendar, Globe, FileText,
+  Play, ChevronRight, Loader2, ZoomIn,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+
+const LiveMap = lazy(() => import("@/components/LiveMap"));
 
 const STATUS_CONFIG: Record<string, { label: string; color: string; icon: React.ReactNode }> = {
   order_confirmed: { label: "Order Confirmed", color: "bg-blue-600", icon: <ClipboardCheck className="h-5 w-5" /> },
@@ -45,6 +48,7 @@ export default function TrackingResult() {
   const [history, setHistory] = useState<PackageHistory[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -244,21 +248,32 @@ export default function TrackingResult() {
             {/* Live Map */}
             {(pkg.senderLat || pkg.receiverLat) && (
               <Card className="border-slate-200 overflow-hidden">
-                <CardHeader className="pb-3">
+                <CardHeader className="pb-3 bg-gradient-to-r from-blue-50 to-white">
                   <CardTitle className="text-lg text-slate-900 flex items-center gap-2">
-                    <MapPin className="h-5 w-5 text-blue-700" />
-                    Live Location
+                    <div className="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center">
+                      <MapPin className="h-4 w-4 text-blue-700" />
+                    </div>
+                    <span className="font-semibold">Live Route Tracking</span>
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="p-0">
                   <div className="h-72">
-                    <LiveMap
-                      status={pkg.status}
-                      senderLat={pkg.senderLat}
-                      senderLng={pkg.senderLng}
-                      receiverLat={pkg.receiverLat}
-                      receiverLng={pkg.receiverLng}
-                    />
+                    <Suspense fallback={
+                      <div className="h-full flex items-center justify-center bg-slate-50">
+                        <div className="text-center">
+                          <Loader2 className="h-8 w-8 animate-spin text-blue-600 mx-auto mb-2" />
+                          <p className="text-sm text-slate-400">Loading map...</p>
+                        </div>
+                      </div>
+                    }>
+                      <LiveMap
+                        status={pkg.status}
+                        senderLat={pkg.senderLat}
+                        senderLng={pkg.senderLng}
+                        receiverLat={pkg.receiverLat}
+                        receiverLng={pkg.receiverLng}
+                      />
+                    </Suspense>
                   </div>
                 </CardContent>
               </Card>
@@ -308,29 +323,66 @@ export default function TrackingResult() {
 
             {/* Media Gallery */}
             {pkg.mediaUrls && pkg.mediaUrls.length > 0 && (
-              <Card className="border-slate-200">
-                <CardHeader className="pb-3">
+              <Card className="border-slate-200 overflow-hidden">
+                <CardHeader className="pb-3 bg-gradient-to-r from-slate-50 to-white">
                   <CardTitle className="text-lg text-slate-900 flex items-center gap-2">
-                    <ImageIcon className="h-5 w-5 text-blue-700" />
-                    Package Photos & Videos
+                    <div className="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center">
+                      <ImageIcon className="h-4 w-4 text-blue-700" />
+                    </div>
+                    <div>
+                      <span className="font-semibold">Media Gallery</span>
+                      <span className="ml-2 text-xs text-slate-400 font-normal">{pkg.mediaUrls.length} file{pkg.mediaUrls.length !== 1 ? "s" : ""}</span>
+                    </div>
                   </CardTitle>
                 </CardHeader>
-                <CardContent>
+                <CardContent className="pt-4">
                   <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-                    {pkg.mediaUrls.map((url, i) => (
-                      <div key={i} className="relative aspect-square rounded-lg overflow-hidden border border-slate-200 group cursor-pointer">
-                        {url.match(/\.(mp4|webm|mov)$/) || url.match(/^data:video/) ? (
-                          <div className="relative w-full h-full">
-                            <video src={url} className="w-full h-full object-cover" preload="metadata" />
-                            <div className="absolute inset-0 bg-black/30 flex items-center justify-center pointer-events-none">
-                              <Video className="h-6 w-6 text-white" />
-                            </div>
-                          </div>
-                        ) : (
-                          <img src={url} alt={`Package media ${i + 1}`} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
-                        )}
-                      </div>
-                    ))}
+                    {pkg.mediaUrls.map((url, i) => {
+                      const isVid = url.match(/\.(mp4|webm|mov)$/) || url.match(/^data:video/);
+                      return (
+                        <button
+                          key={i}
+                          onClick={() => setLightboxIndex(i)}
+                          className="relative aspect-square rounded-xl overflow-hidden border border-slate-200 group cursor-pointer text-left shadow-sm hover:shadow-md transition-all duration-300 hover:-translate-y-0.5"
+                        >
+                          {isVid ? (
+                            <>
+                              <video src={url} className="w-full h-full object-cover" preload="metadata" />
+                              <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/20 to-transparent" />
+                              <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                                <div className="w-12 h-12 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center border border-white/30">
+                                  <Play className="h-5 w-5 text-white ml-0.5" />
+                                </div>
+                              </div>
+                              <div className="absolute top-2 right-2 bg-black/50 backdrop-blur-sm text-white text-[10px] px-2 py-0.5 rounded-full font-medium">
+                                VIDEO
+                              </div>
+                              <div className="absolute bottom-2 left-2 right-2 flex items-center gap-1.5 text-white">
+                                <Play className="h-3 w-3" />
+                                <span className="text-xs font-medium">Click to play</span>
+                              </div>
+                            </>
+                          ) : (
+                            <>
+                              <img
+                                src={url}
+                                alt={`Package media ${i + 1}`}
+                                className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
+                              />
+                              <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors duration-300" />
+                              <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                                <div className="w-12 h-12 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center border border-white/30">
+                                  <ZoomIn className="h-5 w-5 text-white" />
+                                </div>
+                              </div>
+                              <div className="absolute top-2 right-2 bg-black/50 backdrop-blur-sm text-white text-[10px] px-2 py-0.5 rounded-full font-medium">
+                                PHOTO
+                              </div>
+                            </>
+                          )}
+                        </button>
+                      );
+                    })}
                   </div>
                 </CardContent>
               </Card>
@@ -442,6 +494,15 @@ export default function TrackingResult() {
           </div>
         </div>
       </div>
+
+      {/* Media Lightbox */}
+      {lightboxIndex !== null && pkg?.mediaUrls && (
+        <MediaLightbox
+          urls={pkg.mediaUrls}
+          initialIndex={lightboxIndex}
+          onClose={() => setLightboxIndex(null)}
+        />
+      )}
     </div>
   );
 }
