@@ -3,6 +3,8 @@ import { useParams, useNavigate } from "react-router";
 import { packageService } from "@/lib/supabase";
 import type { Package, PackageHistory } from "@/lib/supabase";
 import MediaLightbox from "@/components/MediaLightbox";
+import LanguageSelector from "@/components/LanguageSelector";
+import { useLanguage } from "@/hooks/useLanguage";
 import {
   ArrowLeft, Package, MapPin, Phone, Weight, Clock,
   CheckCircle2, Printer, Truck, ClipboardCheck, Box, AlertTriangle,
@@ -15,7 +17,6 @@ import { Badge } from "@/components/ui/badge";
 
 const LiveMap = lazy(() => import("@/components/LiveMap"));
 
-// Teal color palette matching the Smartship reference
 const TEAL = {
   50: "#f0fdfa",
   100: "#ccfbf1",
@@ -24,81 +25,53 @@ const TEAL = {
   700: "#0f766e",
 };
 
-const STATUS_CONFIG: Record<string, { label: string; color: string; badgeBg: string; badgeText: string; icon: React.ReactNode }> = {
-  order_confirmed: {
-    label: "Order Confirmed",
-    color: TEAL[600],
-    badgeBg: "bg-teal-50",
-    badgeText: "text-teal-700",
-    icon: <ClipboardCheck className="h-4 w-4" />,
-  },
-  picked_by_courier: {
-    label: "Picked by Courier",
-    color: "#3b82f6",
-    badgeBg: "bg-blue-50",
-    badgeText: "text-blue-700",
-    icon: <Box className="h-4 w-4" />,
-  },
-  on_the_way: {
-    label: "On the Way",
-    color: "#6366f1",
-    badgeBg: "bg-indigo-50",
-    badgeText: "text-indigo-700",
-    icon: <Truck className="h-4 w-4" />,
-  },
-  held_by_customs: {
-    label: "Custom Hold",
-    color: "#f59e0b",
-    badgeBg: "bg-amber-50",
-    badgeText: "text-amber-700",
-    icon: <AlertTriangle className="h-4 w-4" />,
-  },
-  delivered: {
-    label: "Delivered",
-    color: "#10b981",
-    badgeBg: "bg-emerald-50",
-    badgeText: "text-emerald-700",
-    icon: <CheckCircle2 className="h-4 w-4" />,
-  },
-};
-
-const STATUS_ORDER = ["order_confirmed", "picked_by_courier", "on_the_way", "held_by_customs", "delivered"];
-
-// Barcode SVG generator
-function Barcode({ value }: { value: string }) {
-  // Generate pseudo-random barcode pattern from the value
-  const bars = value.split("").map((char, i) => {
-    const code = char.charCodeAt(0);
-    const width1 = ((code * 7) % 3) + 1;
-    const width2 = ((code * 13) % 2) + 1;
-    const gap = ((code * 3) % 2) + 1;
-    return (
-      <g key={i}>
-        <rect x={i * 12} y="0" width={width1} height="50" fill="#1e293b" />
-        <rect x={i * 12 + width1 + gap} y="0" width={width2} height="50" fill="#1e293b" />
-      </g>
-    );
-  });
-
-  return (
-    <div className="text-center py-4">
-      <svg viewBox="0 0 120 50" className="w-full max-w-[240px] h-auto mx-auto" preserveAspectRatio="none">
-        {bars}
-      </svg>
-      <p className="text-xs font-mono text-slate-500 mt-2 tracking-widest">{value}</p>
-    </div>
-  );
-}
-
 export default function TrackingResult() {
   const { code } = useParams<{ code: string }>();
   const navigate = useNavigate();
+  const { lang, setLang, t } = useLanguage();
+
   const [pkg, setPkg] = useState<Package | null>(null);
   const [history, setHistory] = useState<PackageHistory[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const [copied, setCopied] = useState(false);
+
+  // Dynamic status config that uses translations
+  const STATUS_CONFIG: Record<string, { color: string; badgeBg: string; badgeText: string; icon: React.ReactNode }> = {
+    order_confirmed: {
+      color: TEAL[600],
+      badgeBg: "bg-teal-50",
+      badgeText: "text-teal-700",
+      icon: <ClipboardCheck className="h-4 w-4" />,
+    },
+    picked_by_courier: {
+      color: "#3b82f6",
+      badgeBg: "bg-blue-50",
+      badgeText: "text-blue-700",
+      icon: <Box className="h-4 w-4" />,
+    },
+    on_the_way: {
+      color: "#6366f1",
+      badgeBg: "bg-indigo-50",
+      badgeText: "text-indigo-700",
+      icon: <Truck className="h-4 w-4" />,
+    },
+    held_by_customs: {
+      color: "#f59e0b",
+      badgeBg: "bg-amber-50",
+      badgeText: "text-amber-700",
+      icon: <AlertTriangle className="h-4 w-4" />,
+    },
+    delivered: {
+      color: "#10b981",
+      badgeBg: "bg-emerald-50",
+      badgeText: "text-emerald-700",
+      icon: <CheckCircle2 className="h-4 w-4" />,
+    },
+  };
+
+  const STATUS_ORDER = ["order_confirmed", "picked_by_courier", "on_the_way", "held_by_customs", "delivered"];
 
   useEffect(() => {
     let cancelled = false;
@@ -111,18 +84,18 @@ export default function TrackingResult() {
             const h = await packageService.getHistory(data.id);
             if (!cancelled) setHistory(h);
           } else {
-            setError("Tracking code not found. Please check and try again.");
+            setError(t("trackingNotFound"));
           }
         }
       } catch (e: any) {
-        if (!cancelled) setError(e?.message || "Failed to load tracking data.");
+        if (!cancelled) setError(e?.message || t("loadingTracking"));
       } finally {
         if (!cancelled) setLoading(false);
       }
     }
     load();
     return () => { cancelled = true; };
-  }, [code]);
+  }, [code, t]);
 
   const copyTracking = () => {
     if (pkg?.trackingCode) {
@@ -132,12 +105,37 @@ export default function TrackingResult() {
     }
   };
 
+  // Barcode SVG generator
+  function Barcode({ value }: { value: string }) {
+    const bars = value.split("").map((char, i) => {
+      const code = char.charCodeAt(0);
+      const width1 = ((code * 7) % 3) + 1;
+      const width2 = ((code * 13) % 2) + 1;
+      const gap = ((code * 3) % 2) + 1;
+      return (
+        <g key={i}>
+          <rect x={i * 12} y="0" width={width1} height="50" fill="#1e293b" />
+          <rect x={i * 12 + width1 + gap} y="0" width={width2} height="50" fill="#1e293b" />
+        </g>
+      );
+    });
+
+    return (
+      <div className="text-center py-4">
+        <svg viewBox="0 0 120 50" className="w-full max-w-[240px] h-auto mx-auto" preserveAspectRatio="none">
+          {bars}
+        </svg>
+        <p className="text-xs font-mono text-slate-500 mt-2 tracking-widest">{value}</p>
+      </div>
+    );
+  }
+
   if (loading) {
     return (
       <div className="min-h-screen bg-[#f8fafc] flex items-center justify-center">
         <div className="text-center">
           <div className="w-12 h-12 border-4 border-teal-100 border-t-teal-600 rounded-full animate-spin mx-auto mb-4" />
-          <p className="text-slate-500 text-sm">Loading tracking details...</p>
+          <p className="text-slate-500 text-sm">{t("loadingTracking")}</p>
         </div>
       </div>
     );
@@ -149,9 +147,9 @@ export default function TrackingResult() {
         <Card className="max-w-md w-full border-0 shadow-lg">
           <CardContent className="p-8 text-center">
             <Package className="h-12 w-12 text-slate-300 mx-auto mb-4" />
-            <h2 className="text-xl font-bold text-slate-900 mb-2">Tracking Not Found</h2>
-            <p className="text-sm text-slate-500 mb-4">{error || "The tracking code you entered could not be found."}</p>
-            <Button className="bg-teal-600 hover:bg-teal-700" onClick={() => navigate("/")}>Track Another</Button>
+            <h2 className="text-xl font-bold text-slate-900 mb-2">{t("trackingNotFound")}</h2>
+            <p className="text-sm text-slate-500 mb-4">{error || t("notFoundDesc")}</p>
+            <Button className="bg-teal-600 hover:bg-teal-700" onClick={() => navigate("/")}>{t("trackAnother")}</Button>
           </CardContent>
         </Card>
       </div>
@@ -161,6 +159,17 @@ export default function TrackingResult() {
   const config = STATUS_CONFIG[pkg.status] || STATUS_CONFIG.order_confirmed;
   const currentStep = STATUS_ORDER.indexOf(pkg.status);
 
+  // Translated status labels
+  const statusLabels: Record<string, string> = {
+    order_confirmed: t("orderConfirmed"),
+    picked_by_courier: t("pickedByCourier"),
+    on_the_way: t("onTheWay"),
+    held_by_customs: t("customHold"),
+    delivered: t("delivered"),
+  };
+
+  const statusLabel = statusLabels[pkg.status] || t("orderConfirmed");
+
   return (
     <div className="min-h-screen bg-[#f8fafc]">
       {/* Top Navigation */}
@@ -168,17 +177,20 @@ export default function TrackingResult() {
         <div className="max-w-4xl mx-auto px-4 py-3 flex items-center justify-between">
           <button onClick={() => navigate("/")} className="flex items-center gap-2 text-slate-500 hover:text-teal-700 transition-colors">
             <ArrowLeft className="h-4 w-4" />
-            <span className="text-sm font-medium">Back</span>
+            <span className="text-sm font-medium">{t("back")}</span>
           </button>
-          <span className="text-sm font-semibold text-slate-900">Tracking Details</span>
-          <button onClick={() => window.print()} className="flex items-center gap-1.5 text-sm text-slate-500 hover:text-teal-700 transition-colors">
-            <Printer className="h-4 w-4" />
-            <span className="hidden sm:inline">Print</span>
-          </button>
+          <span className="text-sm font-semibold text-slate-900">{t("trackingDetails")}</span>
+          <div className="flex items-center gap-1">
+            <LanguageSelector currentLang={lang} onChange={setLang} />
+            <button onClick={() => window.print()} className="flex items-center gap-1.5 text-sm text-slate-500 hover:text-teal-700 transition-colors p-2 rounded-lg hover:bg-slate-100">
+              <Printer className="h-4 w-4" />
+              <span className="hidden sm:inline">{t("print")}</span>
+            </button>
+          </div>
         </div>
       </div>
 
-      <div className="max-w-4xl mx-auto px-4 py-6 space-y-5">
+      <div className="max-w-4xl mx-auto px-4 py-6 space-y-5" dir={lang === "ar" ? "rtl" : "ltr"}>
         {/* ===== RECEIPT HEADER ===== */}
         <Card className="border-0 shadow-sm overflow-hidden">
           {/* Brand Header */}
@@ -190,20 +202,20 @@ export default function TrackingResult() {
                 </div>
                 <div>
                   <h1 className="text-xl font-bold text-slate-900 leading-tight">TitanRoute</h1>
-                  <p className="text-xs text-slate-400">Global Logistics Solutions</p>
+                  <p className="text-xs text-slate-400">{t("globalLogistics")}</p>
                 </div>
               </div>
               <div className="text-right hidden sm:block">
-                <p className="text-[10px] text-slate-400 uppercase tracking-wider">Receipt Generated</p>
+                <p className="text-[10px] text-slate-400 uppercase tracking-wider">{t("receiptGenerated")}</p>
                 <p className="text-xs text-slate-600 font-medium">{new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })}</p>
                 <Badge variant="outline" className="mt-1.5 text-[10px] border-teal-200 text-teal-700 bg-teal-50">
-                  OFFICIAL RECEIPT
+                  {t("officialReceipt")}
                 </Badge>
               </div>
             </div>
             <div className="mt-3 sm:hidden">
               <Badge variant="outline" className="text-[10px] border-teal-200 text-teal-700 bg-teal-50">
-                OFFICIAL RECEIPT
+                {t("officialReceipt")}
               </Badge>
             </div>
           </div>
@@ -216,7 +228,7 @@ export default function TrackingResult() {
                   <Package className="h-5 w-5 text-white" />
                 </div>
                 <div>
-                  <p className="text-teal-100 text-[10px] uppercase tracking-wider font-medium">Tracking Number</p>
+                  <p className="text-teal-100 text-[10px] uppercase tracking-wider font-medium">{t("trackingNumber")}</p>
                   <p className="text-white font-bold text-lg font-mono tracking-wider">{pkg.trackingCode}</p>
                 </div>
               </div>
@@ -224,13 +236,13 @@ export default function TrackingResult() {
                 <button
                   onClick={copyTracking}
                   className="p-2 bg-white/20 rounded-lg hover:bg-white/30 transition-colors"
-                  title="Copy tracking number"
+                  title={t("copyTracking")}
                 >
                   {copied ? <Check className="h-4 w-4 text-white" /> : <Copy className="h-4 w-4 text-white" />}
                 </button>
                 <div className="hidden sm:flex items-center gap-1.5 bg-white/20 rounded-full px-3 py-1.5 backdrop-blur-sm">
                   <Shield className="h-3.5 w-3.5 text-white" />
-                  <span className="text-white text-xs font-medium">Verified</span>
+                  <span className="text-white text-xs font-medium">{t("verified")}</span>
                 </div>
               </div>
             </div>
@@ -244,7 +256,7 @@ export default function TrackingResult() {
                 <div className="w-7 h-7 bg-teal-100 rounded-lg flex items-center justify-center">
                   <Home className="h-3.5 w-3.5 text-teal-700" />
                 </div>
-                <span className="text-xs font-semibold text-teal-700 uppercase tracking-wider">Sender</span>
+                <span className="text-xs font-semibold text-teal-700 uppercase tracking-wider">{t("sender")}</span>
               </div>
               <div className="space-y-1.5">
                 <p className="font-semibold text-slate-900 text-sm">{pkg.senderName}</p>
@@ -267,7 +279,7 @@ export default function TrackingResult() {
                 <div className="w-7 h-7 bg-blue-100 rounded-lg flex items-center justify-center">
                   <MapPin className="h-3.5 w-3.5 text-blue-700" />
                 </div>
-                <span className="text-xs font-semibold text-blue-700 uppercase tracking-wider">Receiver</span>
+                <span className="text-xs font-semibold text-blue-700 uppercase tracking-wider">{t("receiver")}</span>
               </div>
               <div className="space-y-1.5">
                 <p className="font-semibold text-slate-900 text-sm">{pkg.recipientName}</p>
@@ -290,36 +302,36 @@ export default function TrackingResult() {
             {/* Shipment Details Table */}
             <div className="border border-slate-200 rounded-xl overflow-hidden">
               <div className="bg-slate-50 px-4 py-2.5 border-b border-slate-200">
-                <p className="text-xs font-semibold text-slate-600 uppercase tracking-wider">Shipment Details</p>
+                <p className="text-xs font-semibold text-slate-600 uppercase tracking-wider">{t("shipmentDetails")}</p>
               </div>
               <div className="divide-y divide-slate-100">
                 <div className="flex items-center justify-between px-4 py-3">
-                  <span className="text-xs text-slate-500">Order ID</span>
+                  <span className="text-xs text-slate-500">{t("orderId")}</span>
                   <span className="text-sm font-medium text-slate-900 font-mono">{pkg.trackingCode.slice(-4)}</span>
                 </div>
                 <div className="flex items-center justify-between px-4 py-3">
-                  <span className="text-xs text-slate-500">Booking Mode</span>
+                  <span className="text-xs text-slate-500">{t("bookingMode")}</span>
                   <Badge className="bg-rose-50 text-rose-700 border-0 text-[10px]">
                     <Calendar className="h-3 w-3 mr-1" />
-                    To Day
+                    {t("toDay")}
                   </Badge>
                 </div>
                 <div className="flex items-center justify-between px-4 py-3">
-                  <span className="text-xs text-slate-500">Shipment Cost</span>
+                  <span className="text-xs text-slate-500">{t("shipmentCost")}</span>
                   <span className="text-sm font-semibold text-slate-900">${(pkg.shippingCost || 0).toFixed(2)}</span>
                 </div>
                 <div className="flex items-center justify-between px-4 py-3">
-                  <span className="text-xs text-slate-500">Clearance Fee</span>
+                  <span className="text-xs text-slate-500">{t("clearanceFee")}</span>
                   <span className="text-sm font-medium text-slate-900">${(pkg.clearanceFee || 0).toFixed(2)}</span>
                 </div>
                 <div className="flex items-center justify-between px-4 py-3 bg-slate-50">
-                  <span className="text-xs font-semibold text-slate-700">Total Amount</span>
+                  <span className="text-xs font-semibold text-slate-700">{t("totalAmount")}</span>
                   <span className="text-base font-bold text-teal-700">${((pkg.shippingCost || 0) + (pkg.clearanceFee || 0)).toFixed(2)}</span>
                 </div>
                 <div className="flex items-center justify-between px-4 py-3">
-                  <span className="text-xs text-slate-500">Status</span>
+                  <span className="text-xs text-slate-500">{t("status")}</span>
                   <Badge className={`${config.badgeBg} ${config.badgeText} border-0 text-xs font-medium`}>
-                    {config.label}
+                    {statusLabel}
                   </Badge>
                 </div>
               </div>
@@ -357,7 +369,7 @@ export default function TrackingResult() {
                         {isCompleted ? <CheckCircle2 className="h-4 w-4" /> : i + 1}
                       </div>
                       <span className={`text-[9px] font-medium text-center leading-tight ${isCompleted ? "text-slate-700" : "text-slate-400"}`}>
-                        {sConfig.label}
+                        {statusLabels[statusKey] || statusKey}
                       </span>
                     </div>
                   );
@@ -370,10 +382,10 @@ export default function TrackingResult() {
         {/* ===== SHIPMENT INFO BAR ===== */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           {[
-            { icon: Weight, label: "Weight", value: `${pkg.weight} kg` },
-            { icon: Globe, label: "Mode", value: "Sea Freight" },
-            { icon: Calendar, label: "Pickup", value: new Date(pkg.createdAt).toLocaleDateString() },
-            { icon: CreditCard, label: "Total", value: `$${((pkg.shippingCost || 0) + (pkg.clearanceFee || 0)).toFixed(2)}` },
+            { icon: Weight, label: t("weight"), value: `${pkg.weight} ${t("kg")}` },
+            { icon: Globe, label: t("mode"), value: t("seaFreight") },
+            { icon: Calendar, label: t("pickup"), value: new Date(pkg.createdAt).toLocaleDateString() },
+            { icon: CreditCard, label: t("total"), value: `$${((pkg.shippingCost || 0) + (pkg.clearanceFee || 0)).toFixed(2)}` },
           ].map((item) => (
             <div key={item.label} className="bg-white rounded-xl p-4 border border-slate-100 shadow-sm">
               <div className="flex items-center gap-2 mb-1.5">
@@ -395,7 +407,7 @@ export default function TrackingResult() {
                 <div className="w-7 h-7 bg-teal-100 rounded-lg flex items-center justify-center">
                   <MapPin className="h-3.5 w-3.5 text-teal-700" />
                 </div>
-                <span className="font-semibold">Live Route Tracking</span>
+                <span className="font-semibold">{t("liveRouteTracking")}</span>
               </CardTitle>
             </CardHeader>
             <CardContent className="p-0">
@@ -426,16 +438,17 @@ export default function TrackingResult() {
                 <div className="w-7 h-7 bg-teal-100 rounded-lg flex items-center justify-center">
                   <Clock className="h-3.5 w-3.5 text-teal-700" />
                 </div>
-                <span className="font-semibold">Shipment History</span>
+                <span className="font-semibold">{t("shipmentHistory")}</span>
               </CardTitle>
             </CardHeader>
             <CardContent className="p-4">
               <div className="space-y-0">
                 {history.length === 0 ? (
-                  <p className="text-sm text-slate-400 text-center py-6">No history entries yet.</p>
+                  <p className="text-sm text-slate-400 text-center py-6">{t("noHistory")}</p>
                 ) : (
                   history.map((h, i) => {
                     const hConfig = STATUS_CONFIG[h.status] || STATUS_CONFIG.order_confirmed;
+                    const hLabel = statusLabels[h.status] || t("orderConfirmed");
                     const isLast = i === history.length - 1;
                     return (
                       <div key={h.id} className="flex gap-3 relative">
@@ -445,7 +458,7 @@ export default function TrackingResult() {
                         </div>
                         <div className="flex-1 pb-5">
                           <div className="flex items-center gap-2 mb-0.5">
-                            <span className="text-xs font-semibold text-slate-800">{hConfig.label}</span>
+                            <span className="text-xs font-semibold text-slate-800">{hLabel}</span>
                           </div>
                           <span className="text-[10px] text-slate-400">{new Date(h.changedAt).toLocaleString()}</span>
                           {h.reason && <p className="text-xs text-slate-500 mt-1">{h.reason}</p>}
@@ -467,8 +480,10 @@ export default function TrackingResult() {
                     <ImageIcon className="h-3.5 w-3.5 text-teal-700" />
                   </div>
                   <div>
-                    <span className="font-semibold">Media</span>
-                    <span className="ml-2 text-[10px] text-slate-400 font-normal">{pkg.mediaUrls.length} file{pkg.mediaUrls.length !== 1 ? "s" : ""}</span>
+                    <span className="font-semibold">{t("media")}</span>
+                    <span className="ml-2 text-[10px] text-slate-400 font-normal">
+                      {pkg.mediaUrls.length} {pkg.mediaUrls.length === 1 ? t("fileCount") : t("filesCount")}
+                    </span>
                   </div>
                 </CardTitle>
               </CardHeader>
@@ -516,11 +531,11 @@ export default function TrackingResult() {
                   <div className="w-7 h-7 bg-slate-100 rounded-lg flex items-center justify-center">
                     <ImageIcon className="h-3.5 w-3.5 text-slate-400" />
                   </div>
-                  <span className="font-semibold text-slate-500">No Media</span>
+                  <span className="font-semibold text-slate-500">{t("noMediaFiles")}</span>
                 </CardTitle>
               </CardHeader>
               <CardContent className="p-4">
-                <p className="text-sm text-slate-400 text-center py-6">No photos or videos uploaded for this shipment.</p>
+                <p className="text-sm text-slate-400 text-center py-6">{t("noMedia")}</p>
               </CardContent>
             </Card>
           )}
@@ -534,7 +549,7 @@ export default function TrackingResult() {
             onClick={() => window.print()}
           >
             <Printer className="h-4 w-4 mr-2" />
-            Print Receipt
+            {t("printReceipt")}
           </Button>
         </div>
       </div>
