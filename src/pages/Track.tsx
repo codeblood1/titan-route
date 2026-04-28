@@ -23,6 +23,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import HeroSlideshow from "@/components/HeroSlideshow";
+import { useLanguage } from "@/hooks/useLanguage";
 
 function AnimatedCounter({ target, suffix = "" }: { target: number; suffix?: string }) {
   const [count, setCount] = useState(0);
@@ -89,6 +90,7 @@ export default function Track() {
   const [trackingCode, setTrackingCode] = useState("");
   const [isSearching, setIsSearching] = useState(false);
   const navigate = useNavigate();
+  const { t } = useLanguage();
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -137,17 +139,17 @@ export default function Track() {
             >
               <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-blue-500/20 border border-blue-500/30 rounded-full text-blue-300 text-sm font-medium mb-6">
                 <Zap className="h-4 w-4" />
-                Trusted by 10,000+ businesses worldwide
+                {t("heroTagline")}
               </div>
               <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold mb-6 leading-[1.15]">
-                Ship Faster. <br />
-                Track Smarter. <br />
+                {t("shipFaster")} <br />
+                {t("trackSmarter")} <br />
                 <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-cyan-300">
-                  Deliver Better.
+                  {t("deliverBetter")}
                 </span>
               </h1>
               <p className="text-lg text-slate-300 mb-8 max-w-lg leading-relaxed">
-                TitanRoute is the all-in-one logistics platform for modern businesses. Ground, air, ocean, and warehouse — managed from a single dashboard with real-time tracking.
+                {t("heroDesc")}
               </p>
 
               {/* Tracking Form */}
@@ -155,7 +157,7 @@ export default function Track() {
                 <div className="relative flex-1">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
                   <Input
-                    placeholder="Enter tracking number..."
+                    placeholder={t("enterTracking")}
                     value={trackingCode}
                     onChange={(e) => setTrackingCode(e.target.value)}
                     className="h-12 pl-10 bg-white/10 border-white/20 text-white placeholder:text-white/50 focus:bg-white/20 focus:border-blue-400"
@@ -167,18 +169,18 @@ export default function Track() {
                   className="h-12 bg-blue-600 hover:bg-blue-500 text-white px-6 font-semibold"
                   disabled={isSearching || !trackingCode.trim()}
                 >
-                  {isSearching ? "Tracking..." : "Track"}
+                  {isSearching ? t("tracking") : t("track")}
                 </Button>
               </form>
 
               <div className="flex items-center gap-6 mt-6 text-sm text-slate-400">
                 <span className="flex items-center gap-1.5">
                   <CheckCircle2 className="h-4 w-4 text-green-400" />
-                  No account needed
+                  {t("noAccountNeeded")}
                 </span>
                 <span className="flex items-center gap-1.5">
                   <CheckCircle2 className="h-4 w-4 text-green-400" />
-                  Real-time updates
+                  {t("realTimeUpdates")}
                 </span>
               </div>
             </motion.div>
@@ -194,11 +196,11 @@ export default function Track() {
                   {/* Simulated tracking card */}
                   <div className="flex items-center justify-between mb-4">
                     <div>
-                      <p className="text-xs text-slate-400">Tracking Number</p>
+                      <p className="text-xs text-slate-400">{t("trackingNumber")}</p>
                       <p className="text-lg font-mono font-bold">ABC123DEF4</p>
                     </div>
                     <div className="px-3 py-1 bg-green-500/20 text-green-400 rounded-full text-xs font-semibold">
-                      Delivered
+                      {t("delivered")}
                     </div>
                   </div>
                   <div className="space-y-3">
@@ -213,15 +215,15 @@ export default function Track() {
                     <div className="grid grid-cols-3 gap-2 text-center text-xs text-slate-400">
                       <div>
                         <div className="w-6 h-6 rounded-full bg-blue-600 mx-auto mb-1 flex items-center justify-center text-[10px]">📤</div>
-                        Sent
+                        {t("pickedByCourier")}
                       </div>
                       <div>
                         <div className="w-6 h-6 rounded-full bg-blue-600 mx-auto mb-1 flex items-center justify-center text-[10px]">📦</div>
-                        Received
+                        {t("onTheWay")}
                       </div>
                       <div>
                         <div className="w-6 h-6 rounded-full bg-green-600 mx-auto mb-1 flex items-center justify-center text-[10px]">✅</div>
-                        Delivered
+                        {t("delivered")}
                       </div>
                     </div>
                   </div>
@@ -236,8 +238,8 @@ export default function Track() {
                     <Globe className="h-5 w-5 text-blue-700" />
                   </div>
                   <div>
-                    <p className="text-sm font-bold text-slate-900">120+ Countries</p>
-                    <p className="text-xs text-slate-500">Global Coverage</p>
+                    <p className="text-sm font-bold text-slate-900">120+ {t("countries")}</p>
+                    <p className="text-xs text-slate-500">{t("globalLogistics")}</p>
                   </div>
                 </motion.div>
                 <motion.div
@@ -249,8 +251,8 @@ export default function Track() {
                     <Clock className="h-5 w-5 text-green-700" />
                   </div>
                   <div>
-                    <p className="text-sm font-bold text-slate-900">99% On-Time</p>
-                    <p className="text-xs text-slate-500">Delivery Rate</p>
+                    <p className="text-sm font-bold text-slate-900">99% {t("onTimeRate")}</p>
+                    <p className="text-xs text-slate-500">{t("delivered")}</p>
                   </div>
                 </motion.div>
               </div>
@@ -264,10 +266,10 @@ export default function Track() {
         <div className="max-w-7xl mx-auto px-4">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
             {[
-              { target: 50, suffix: "K+", label: "Deliveries" },
-              { target: 120, suffix: "+", label: "Countries" },
-              { target: 99, suffix: "%", label: "On-Time Rate" },
-              { target: 47, suffix: "", label: "Warehouses" },
+              { target: 50, suffix: "K+", label: t("deliveries") },
+              { target: 120, suffix: "+", label: t("countries") },
+              { target: 99, suffix: "%", label: t("onTimeRate") },
+              { target: 47, suffix: "", label: t("warehouses") },
             ].map((stat, i) => (
               <motion.div
                 key={stat.label}
@@ -294,15 +296,15 @@ export default function Track() {
             viewport={{ once: true }}
             className="text-center mb-14"
           >
-            <h2 className="text-3xl md:text-4xl font-bold text-slate-900 mb-4">How TitanRoute Works</h2>
-            <p className="text-slate-500 max-w-2xl mx-auto">From booking to delivery in four simple steps. No complicated contracts, no hidden fees.</p>
+            <h2 className="text-3xl md:text-4xl font-bold text-slate-900 mb-4">{t("howItWorks")}</h2>
+            <p className="text-slate-500 max-w-2xl mx-auto">{t("howItWorksDesc")}</p>
           </motion.div>
           <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
             {[
-              { step: "01", title: "Book Online", desc: "Enter your shipment details and instantly compare rates from 10+ carriers.", icon: "📝", color: "bg-blue-50 text-blue-700" },
-              { step: "02", title: "We Pick Up", desc: "Schedule a pickup or drop off at any of our 47 fulfillment centers.", icon: "📦", color: "bg-sky-50 text-sky-700" },
-              { step: "03", title: "Track Live", desc: "Follow your shipment with GPS tracking, SMS alerts, and live map views.", icon: "📍", color: "bg-indigo-50 text-indigo-700" },
-              { step: "04", title: "Delivered", desc: "Receive proof of delivery with signature and photo confirmation.", icon: "✅", color: "bg-emerald-50 text-emerald-700" },
+              { step: "01", title: t("bookOnline"), desc: t("bookOnlineDesc"), icon: "📝", color: "bg-blue-50 text-blue-700" },
+              { step: "02", title: t("wePickUp"), desc: t("wePickUpDesc"), icon: "📦", color: "bg-sky-50 text-sky-700" },
+              { step: "03", title: t("trackLive"), desc: t("trackLiveDesc"), icon: "📍", color: "bg-indigo-50 text-indigo-700" },
+              { step: "04", title: t("stepDelivered"), desc: t("stepDeliveredDesc"), icon: "✅", color: "bg-emerald-50 text-emerald-700" },
             ].map((item, i) => (
               <motion.div
                 key={item.step}
@@ -342,15 +344,15 @@ export default function Track() {
             viewport={{ once: true }}
             className="text-center mb-14"
           >
-            <h2 className="text-3xl md:text-4xl font-bold text-slate-900 mb-4">Multi-Modal Shipping</h2>
-            <p className="text-slate-500 max-w-2xl mx-auto">Choose the mode that fits your timeline and budget. Switch between them seamlessly from one account.</p>
+            <h2 className="text-3xl md:text-4xl font-bold text-slate-900 mb-4">{t("multiModalShipping")}</h2>
+            <p className="text-slate-500 max-w-2xl mx-auto">{t("multiModalDesc")}</p>
           </motion.div>
           <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
             {[
-              { icon: Truck, title: "Ground Freight", desc: "FTL and LTL trucking across North America with guaranteed delivery windows.", color: "from-blue-600 to-blue-700", emoji: "🚚" },
-              { icon: Plane, title: "Air Freight", desc: "Express and standard air cargo to 120+ countries with customs clearance included.", color: "from-sky-600 to-sky-700", emoji: "✈️" },
-              { icon: Ship, title: "Ocean Freight", desc: "FCL and LCL container shipping with flexible schedules and competitive rates.", color: "from-teal-600 to-teal-700", emoji: "🚢" },
-              { icon: Warehouse, title: "Warehousing", desc: "47 fulfillment centers offering storage, pick-pack, and same-day dispatch.", color: "from-amber-600 to-amber-700", emoji: "🏭" },
+              { icon: Truck, title: t("groundFreight"), desc: t("groundFreightDesc"), color: "from-blue-600 to-blue-700", emoji: "🚚" },
+              { icon: Plane, title: t("airFreight"), desc: t("airFreightDesc"), color: "from-sky-600 to-sky-700", emoji: "✈️" },
+              { icon: Ship, title: t("oceanFreight"), desc: t("oceanFreightDesc"), color: "from-teal-600 to-teal-700", emoji: "🚢" },
+              { icon: Warehouse, title: t("warehousing"), desc: t("warehousingDesc"), color: "from-amber-600 to-amber-700", emoji: "🏭" },
             ].map((service, i) => (
               <motion.div
                 key={service.title}
@@ -371,7 +373,7 @@ export default function Track() {
                       onClick={() => navigate("/services")}
                       className="text-sm font-semibold text-blue-700 hover:text-blue-800 flex items-center gap-1 group/link"
                     >
-                      Learn more
+                      {t("learnMore")}
                       <ArrowUpRight className="h-4 w-4 group-hover/link:translate-x-0.5 group-hover/link:-translate-y-0.5 transition-transform" />
                     </button>
                   </CardContent>
@@ -391,8 +393,8 @@ export default function Track() {
             viewport={{ once: true }}
             className="text-center mb-14"
           >
-            <h2 className="text-3xl md:text-4xl font-bold text-slate-900 mb-4">Trusted by Businesses</h2>
-            <p className="text-slate-500 max-w-2xl mx-auto">Do not take our word for it. Here is what our clients say about shipping with TitanRoute.</p>
+            <h2 className="text-3xl md:text-4xl font-bold text-slate-900 mb-4">{t("trustedByBusinesses")}</h2>
+            <p className="text-slate-500 max-w-2xl mx-auto">{t("trustedByDesc")}</p>
           </motion.div>
           <div className="grid md:grid-cols-3 gap-6">
             {testimonials.map((t, i) => (
@@ -432,7 +434,7 @@ export default function Track() {
       <section className="py-12 bg-slate-50 border-y border-slate-200">
         <div className="max-w-7xl mx-auto px-4">
           <p className="text-center text-sm text-slate-500 font-medium mb-4 uppercase tracking-wider">
-            Integrated with the world's top carriers
+            {t("heroTagline")}
           </p>
           <MarqueeLogos />
         </div>
@@ -452,16 +454,16 @@ export default function Track() {
               <div className="absolute bottom-0 right-1/4 w-72 h-72 bg-orange-500 rounded-full blur-3xl" />
             </div>
             <div className="relative z-10 max-w-2xl mx-auto">
-              <h2 className="text-3xl md:text-4xl font-bold mb-4">Ready to Transform Your Logistics?</h2>
+              <h2 className="text-3xl md:text-4xl font-bold mb-4">{t("readyToTransform")}</h2>
               <p className="text-slate-300 mb-8 text-lg">
-                Join 10,000+ businesses shipping smarter with TitanRoute. Get your first quote in under 2 minutes.
+                {t("ctaDesc")}
               </p>
               <div className="flex flex-col sm:flex-row gap-3 justify-center">
                 <Button
                   className="h-12 bg-blue-600 hover:bg-blue-500 text-white px-8 text-base font-semibold"
                   onClick={() => navigate("/contact")}
                 >
-                  Get a Free Quote
+                  {t("getFreeQuote")}
                   <ArrowRight className="h-5 w-5 ml-2" />
                 </Button>
                 <Button
@@ -469,7 +471,7 @@ export default function Track() {
                   className="h-12 border-white/30 text-white hover:bg-white/10 px-8 text-base"
                   onClick={() => navigate("/services")}
                 >
-                  Explore Services
+                  {t("exploreServices")}
                 </Button>
               </div>
             </div>
@@ -486,17 +488,17 @@ export default function Track() {
             viewport={{ once: true }}
           >
             <Mail className="h-10 w-10 text-blue-700 mx-auto mb-4" />
-            <h2 className="text-2xl font-bold text-slate-900 mb-2">Stay in the Loop</h2>
-            <p className="text-slate-500 mb-6">Get logistics tips, industry insights, and exclusive offers delivered to your inbox.</p>
+            <h2 className="text-2xl font-bold text-slate-900 mb-2">{t("stayInLoop")}</h2>
+            <p className="text-slate-500 mb-6">{t("newsletterDesc")}</p>
             <form className="flex flex-col sm:flex-row gap-3 max-w-md mx-auto" onSubmit={(e) => { e.preventDefault(); alert("Thanks for subscribing!"); }}>
               <Input
                 type="email"
-                placeholder="your@email.com"
+                placeholder={t("emailPlaceholder")}
                 className="h-11"
                 required
               />
               <Button type="submit" className="h-11 bg-blue-700 hover:bg-blue-800 px-6">
-                Subscribe
+                {t("subscribe")}
               </Button>
             </form>
           </motion.div>
