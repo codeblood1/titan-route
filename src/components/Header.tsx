@@ -2,12 +2,15 @@ import { useState, useEffect } from "react";
 import { Link, useLocation, useNavigate } from "react-router";
 import { Truck, Menu, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import LanguageSelector from "./LanguageSelector";
+import { useLanguage } from "@/hooks/useLanguage";
 
 export default function Header() {
   const [scrolled, setScrolled] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
+  const { lang, setLang } = useLanguage();
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 20);
@@ -75,6 +78,9 @@ export default function Header() {
 
           {/* Actions */}
           <div className="flex items-center gap-2">
+            <div className="hidden sm:block">
+              <LanguageSelector currentLang={lang} onChange={setLang} />
+            </div>
             <Button
               size="sm"
               className={`text-sm ${scrolled ? "bg-blue-700 hover:bg-blue-800 text-white" : "bg-white/20 hover:bg-white/30 text-white backdrop-blur"}`}
@@ -115,6 +121,9 @@ export default function Header() {
                 {item.label}
               </Link>
             ))}
+            <div className="mt-4 px-4">
+              <LanguageSelector currentLang={lang} onChange={setLang} />
+            </div>
           </div>
         </div>
       )}
