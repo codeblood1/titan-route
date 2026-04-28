@@ -187,7 +187,7 @@ function mapFromSupabasePackage(row: Record<string, unknown>): Package {
     fishAvatar: String(row.fish_avatar),
     status: String(row.status) as Package["status"],
     customStatusReason: row.custom_status_reason ? String(row.custom_status_reason) : null,
-    mediaUrls: Array.isArray(row.media_urls) ? (row.media_urls as string[]) : [],
+    mediaUrls: Array.isArray(row.media_urls) ? (row.media_urls as string[]) : row.media_urls ? [String(row.media_urls)] : [],
     senderLat: row.sender_lat != null ? Number(row.sender_lat) : null,
     senderLng: row.sender_lng != null ? Number(row.sender_lng) : null,
     receiverLat: row.receiver_lat != null ? Number(row.receiver_lat) : null,
@@ -267,47 +267,78 @@ function mapFromSupabaseHistory(row: Record<string, unknown>): PackageHistory {
 }
 
 // ===== FILE UPLOAD =====
-export async function uploadPackageFiles(files: File[]): Promise<string[]> {
-  if (!files || files.length === 0) return [];
+// Reads a file as base64 data URL (used as fallback when Supabase Storage fails)
+function readFileAsDataURL(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(reader.result as string);
+    reader.onerror = () => reject(new Error(`Failed to read ${file.name}`));
+    reader.readAsDataURL(file);
+  });
+}
 
+export async function uploadPackageFiles(files: File[]): Promise<string[]> {
+  if (!files || files.length === 0) {
+    console.log("[uploadPackageFiles] No files provided");
+    return [];
+  }
+  console.log(`[uploadPackageFiles] Uploading ${files.length} file(s)...`);
+
+  // If no Supabase client, use base64 fallback
   if (!supabase) {
-    // LocalStorage fallback: base64 data URIs
+    console.log("[uploadPackageFiles] No Supabase client - using base64 fallback");
     const urls: string[] = [];
     for (const file of files) {
       if (file.size > 2 * 1024 * 1024) {
         throw new Error(`${file.name} is too large (max 2MB in demo mode)`);
       }
-      const reader = new FileReader();
-      const dataUrl = await new Promise<string>((resolve, reject) => {
-        reader.onloadend = () => resolve(reader.result as string);
-        reader.onerror = () => reject(new Error(`Failed to read ${file.name}`));
-        reader.readAsDataURL(file);
-      });
+      const dataUrl = await readFileAsDataURL(file);
       urls.push(dataUrl);
+      console.log(`[uploadPackageFiles] Base64 encoded: ${file.name} (${dataUrl.length} chars)`);
     }
+    console.log(`[uploadPackageFiles] Base64 complete: ${urls.length} file(s)`);
     return urls;
   }
 
-  // Supabase Storage upload
+  // Try Supabase Storage first, fall back to base64 on failure
   const urls: string[] = [];
+  let useBase64Fallback = false;
+
   for (const file of files) {
     if (file.size > 10 * 1024 * 1024) {
       throw new Error(`${file.name} is too large (max 10MB)`);
     }
+
+    // If a previous file failed storage upload, use base64 for all remaining
+    if (useBase64Fallback) {
+      console.log(`[uploadPackageFiles] Using base64 fallback for: ${file.name}`);
+      const dataUrl = await readFileAsDataURL(file);
+      urls.push(dataUrl);
+      continue;
+    }
+
     const fileExt = file.name.split('.').pop();
     const fileName = `${Date.now()}-${Math.random().toString(36).substring(2, 9)}.${fileExt}`;
     const filePath = `packages/${fileName}`;
 
+    console.log(`[uploadPackageFiles] Uploading to Storage: ${file.name} -> ${filePath}`);
     const { error: uploadError } = await supabase.storage
       .from('titanroute-media')
       .upload(filePath, file, { upsert: false });
 
     if (uploadError) {
-      if (uploadError.message?.includes('not found') || uploadError.message?.includes('bucket')) {
-        throw new Error(
-          `Storage bucket 'titanroute-media' not found. ` +
-          `Create it in Supabase Dashboard → Storage → New Bucket → Name: titanroute-media → Public.`
-        );
+      console.error(`[uploadPackageFiles] Storage upload failed:`, uploadError.message, uploadError);
+      // If bucket not found or permission denied, switch to base64 fallback
+      if (uploadError.message?.includes('not found') ||
+          uploadError.message?.includes('bucket') ||
+          uploadError.message?.includes('403') ||
+          uploadError.message?.includes('permission') ||
+          uploadError.message?.includes('Unauthorized')) {
+        console.warn(`[uploadPackageFiles] Storage unavailable, switching to base64 fallback`);
+        useBase64Fallback = true;
+        const dataUrl = await readFileAsDataURL(file);
+        urls.push(dataUrl);
+        continue;
       }
       throw new Error(`Upload failed for ${file.name}: ${uploadError.message}`);
     }
@@ -318,8 +349,16 @@ export async function uploadPackageFiles(files: File[]): Promise<string[]> {
 
     if (urlData?.publicUrl) {
       urls.push(urlData.publicUrl);
+      console.log(`[uploadPackageFiles] Storage URL: ${urlData.publicUrl}`);
+    } else {
+      console.warn(`[uploadPackageFiles] No publicUrl returned, using base64 fallback`);
+      useBase64Fallback = true;
+      const dataUrl = await readFileAsDataURL(file);
+      urls.push(dataUrl);
     }
   }
+
+  console.log(`[uploadPackageFiles] Done: ${urls.length} URL(s) total`);
   return urls;
 }
 
@@ -422,10 +461,13 @@ export const packageService = {
       updatedAt: now(),
       ...data,
     };
+    console.log("[packageService.create] pkg.mediaUrls count:", pkg.mediaUrls?.length ?? 0, "urls:", pkg.mediaUrls);
 
     if (!USE_LOCAL && supabase) {
+      const sbPayload = mapToSupabasePackage(pkg);
+      console.log("[packageService.create] Supabase payload media_urls:", sbPayload.media_urls);
       const { data: insertedRows, error } = await withTimeout(
-        supabase.from("packages").insert(mapToSupabasePackage(pkg)).select(),
+        supabase.from("packages").insert(sbPayload).select(),
         15000,
         "Package create"
       );
@@ -437,6 +479,8 @@ export const packageService = {
         console.warn("[packageService.create] Insert succeeded but no rows returned. RLS may be blocking SELECT after INSERT.");
         return pkg;
       }
+      const returnedMediaUrls = (insertedRows[0] as any)?.media_urls;
+      console.log("[packageService.create] Returned media_urls from DB:", returnedMediaUrls);
       // Insert initial history entry
       const historyEntry = {
         id: generateId(),

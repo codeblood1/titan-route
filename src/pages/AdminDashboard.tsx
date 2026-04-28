@@ -611,7 +611,7 @@ function ShipmentsPage() {
                 <Table className="min-w-[640px] md:min-w-0">
                   <TableHeader><TableRow>
                     <TableHead>Tracking</TableHead><TableHead>Carrier</TableHead><TableHead className="hidden sm:table-cell">Recipient</TableHead>
-                    <TableHead>Status</TableHead><TableHead className="hidden md:table-cell">Weight</TableHead><TableHead className="hidden md:table-cell">Created</TableHead><TableHead className="text-right">Actions</TableHead>
+                    <TableHead>Status</TableHead><TableHead className="hidden md:table-cell">Media</TableHead><TableHead className="hidden md:table-cell">Created</TableHead><TableHead className="text-right">Actions</TableHead>
                   </TableRow></TableHeader>
                   <TableBody>
                     {paginated.length === 0 ? (
@@ -633,7 +633,16 @@ function ShipmentsPage() {
                             <TableCell><div className="flex items-center gap-2"><span className="text-lg">{carrier.emoji}</span><span className="text-sm hidden sm:inline">{carrier.name}</span></div></TableCell>
                             <TableCell className="text-sm hidden sm:table-cell">{pkg.recipientName}</TableCell>
                             <TableCell><Badge className={`${STATUS_COLORS[pkg.status]} text-white text-xs`}>{STATUS_LABELS[pkg.status]}</Badge></TableCell>
-                            <TableCell className="text-sm hidden md:table-cell">{pkg.weight} kg</TableCell>
+                            <TableCell className="text-sm hidden md:table-cell">
+                              {pkg.mediaUrls && pkg.mediaUrls.length > 0 ? (
+                                <span className="inline-flex items-center gap-1 text-blue-600">
+                                  <Camera className="h-3.5 w-3.5" />
+                                  {pkg.mediaUrls.length}
+                                </span>
+                              ) : (
+                                <span className="text-slate-400">-</span>
+                              )}
+                            </TableCell>
                             <TableCell className="text-sm text-slate-500 hidden md:table-cell">{new Date(pkg.createdAt).toLocaleDateString()}</TableCell>
                             <TableCell className="text-right">
                               <div className="flex items-center justify-end gap-0.5">
