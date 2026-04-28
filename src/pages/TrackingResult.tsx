@@ -6,8 +6,8 @@ import MediaLightbox from "@/components/MediaLightbox";
 import {
   ArrowLeft, Package, MapPin, Phone, Weight, Clock,
   CheckCircle2, Printer, Truck, ClipboardCheck, Box, AlertTriangle,
-  Home, Image as ImageIcon, Video, X, Calendar, Globe, FileText,
-  Play, ChevronRight, Loader2, ZoomIn,
+  Home, Image as ImageIcon, Video, Play, Loader2, ZoomIn,
+  Shield, Globe, Calendar, CreditCard, Copy, Check,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -15,40 +15,90 @@ import { Badge } from "@/components/ui/badge";
 
 const LiveMap = lazy(() => import("@/components/LiveMap"));
 
-const STATUS_CONFIG: Record<string, { label: string; color: string; icon: React.ReactNode }> = {
-  order_confirmed: { label: "Order Confirmed", color: "bg-blue-600", icon: <ClipboardCheck className="h-5 w-5" /> },
-  picked_by_courier: { label: "Picked by Courier", color: "bg-blue-500", icon: <Box className="h-5 w-5" /> },
-  on_the_way: { label: "On the Way", color: "bg-slate-500", icon: <Truck className="h-5 w-5" /> },
-  held_by_customs: { label: "Custom Hold", color: "bg-amber-500", icon: <AlertTriangle className="h-5 w-5" /> },
-  delivered: { label: "Delivered", color: "bg-emerald-600", icon: <CheckCircle2 className="h-5 w-5" /> },
+// Teal color palette matching the Smartship reference
+const TEAL = {
+  50: "#f0fdfa",
+  100: "#ccfbf1",
+  500: "#14b8a6",
+  600: "#0d9488",
+  700: "#0f766e",
+};
+
+const STATUS_CONFIG: Record<string, { label: string; color: string; badgeBg: string; badgeText: string; icon: React.ReactNode }> = {
+  order_confirmed: {
+    label: "Order Confirmed",
+    color: TEAL[600],
+    badgeBg: "bg-teal-50",
+    badgeText: "text-teal-700",
+    icon: <ClipboardCheck className="h-4 w-4" />,
+  },
+  picked_by_courier: {
+    label: "Picked by Courier",
+    color: "#3b82f6",
+    badgeBg: "bg-blue-50",
+    badgeText: "text-blue-700",
+    icon: <Box className="h-4 w-4" />,
+  },
+  on_the_way: {
+    label: "On the Way",
+    color: "#6366f1",
+    badgeBg: "bg-indigo-50",
+    badgeText: "text-indigo-700",
+    icon: <Truck className="h-4 w-4" />,
+  },
+  held_by_customs: {
+    label: "Custom Hold",
+    color: "#f59e0b",
+    badgeBg: "bg-amber-50",
+    badgeText: "text-amber-700",
+    icon: <AlertTriangle className="h-4 w-4" />,
+  },
+  delivered: {
+    label: "Delivered",
+    color: "#10b981",
+    badgeBg: "bg-emerald-50",
+    badgeText: "text-emerald-700",
+    icon: <CheckCircle2 className="h-4 w-4" />,
+  },
 };
 
 const STATUS_ORDER = ["order_confirmed", "picked_by_courier", "on_the_way", "held_by_customs", "delivered"];
 
+// Barcode SVG generator
+function Barcode({ value }: { value: string }) {
+  // Generate pseudo-random barcode pattern from the value
+  const bars = value.split("").map((char, i) => {
+    const code = char.charCodeAt(0);
+    const width1 = ((code * 7) % 3) + 1;
+    const width2 = ((code * 13) % 2) + 1;
+    const gap = ((code * 3) % 2) + 1;
+    return (
+      <g key={i}>
+        <rect x={i * 12} y="0" width={width1} height="50" fill="#1e293b" />
+        <rect x={i * 12 + width1 + gap} y="0" width={width2} height="50" fill="#1e293b" />
+      </g>
+    );
+  });
+
+  return (
+    <div className="text-center py-4">
+      <svg viewBox="0 0 120 50" className="w-full max-w-[240px] h-auto mx-auto" preserveAspectRatio="none">
+        {bars}
+      </svg>
+      <p className="text-xs font-mono text-slate-500 mt-2 tracking-widest">{value}</p>
+    </div>
+  );
+}
+
 export default function TrackingResult() {
   const { code } = useParams<{ code: string }>();
   const navigate = useNavigate();
-
-  // Redirect to search page if no tracking code provided
-  if (!code || code.trim() === "") {
-    return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center px-4">
-        <Card className="max-w-md w-full">
-          <CardContent className="p-8 text-center">
-            <Package className="h-12 w-12 text-slate-400 mx-auto mb-4" />
-            <h2 className="text-xl font-bold text-slate-900 mb-2">No Tracking Code</h2>
-            <p className="text-slate-500 mb-4">Enter a tracking code to view shipment details.</p>
-            <Button className="bg-blue-700 hover:bg-blue-800" onClick={() => navigate("/")}>Go to Search</Button>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
   const [pkg, setPkg] = useState<Package | null>(null);
   const [history, setHistory] = useState<PackageHistory[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -74,12 +124,20 @@ export default function TrackingResult() {
     return () => { cancelled = true; };
   }, [code]);
 
+  const copyTracking = () => {
+    if (pkg?.trackingCode) {
+      navigator.clipboard.writeText(pkg.trackingCode);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
+  };
+
   if (loading) {
     return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+      <div className="min-h-screen bg-[#f8fafc] flex items-center justify-center">
         <div className="text-center">
-          <div className="w-12 h-12 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin mx-auto mb-4" />
-          <p className="text-slate-500">Loading tracking details...</p>
+          <div className="w-12 h-12 border-4 border-teal-100 border-t-teal-600 rounded-full animate-spin mx-auto mb-4" />
+          <p className="text-slate-500 text-sm">Loading tracking details...</p>
         </div>
       </div>
     );
@@ -87,14 +145,13 @@ export default function TrackingResult() {
 
   if (error || !pkg) {
     return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center px-4">
-        <Card className="max-w-md w-full">
+      <div className="min-h-screen bg-[#f8fafc] flex items-center justify-center px-4">
+        <Card className="max-w-md w-full border-0 shadow-lg">
           <CardContent className="p-8 text-center">
-            <Package className="h-12 w-12 text-slate-400 mx-auto mb-4" />
+            <Package className="h-12 w-12 text-slate-300 mx-auto mb-4" />
             <h2 className="text-xl font-bold text-slate-900 mb-2">Tracking Not Found</h2>
-            <p className="text-sm text-slate-500 mb-2">{error || "The tracking code you entered could not be found."}</p>
-            <p className="text-xs text-slate-400 mb-4">Open browser DevTools (F12) → Console to see detailed query logs.</p>
-            <Button className="bg-blue-700 hover:bg-blue-800" onClick={() => navigate("/")}>Track Another</Button>
+            <p className="text-sm text-slate-500 mb-4">{error || "The tracking code you entered could not be found."}</p>
+            <Button className="bg-teal-600 hover:bg-teal-700" onClick={() => navigate("/")}>Track Another</Button>
           </CardContent>
         </Card>
       </div>
@@ -105,73 +162,201 @@ export default function TrackingResult() {
   const currentStep = STATUS_ORDER.indexOf(pkg.status);
 
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className="min-h-screen bg-[#f8fafc]">
       {/* Top Navigation */}
       <div className="bg-white border-b border-slate-200 sticky top-0 z-50">
-        <div className="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
-          <button onClick={() => navigate("/")} className="flex items-center gap-2 text-slate-600 hover:text-blue-700 transition-colors">
-            <ArrowLeft className="h-5 w-5" />
-            <span className="font-semibold text-sm">Back to Track</span>
+        <div className="max-w-4xl mx-auto px-4 py-3 flex items-center justify-between">
+          <button onClick={() => navigate("/")} className="flex items-center gap-2 text-slate-500 hover:text-teal-700 transition-colors">
+            <ArrowLeft className="h-4 w-4" />
+            <span className="text-sm font-medium">Back</span>
           </button>
-          <h1 className="text-lg font-bold text-slate-900">TitanRoute Tracking</h1>
-          <button onClick={() => window.print()} className="flex items-center gap-1.5 text-sm text-slate-500 hover:text-blue-700 transition-colors">
+          <span className="text-sm font-semibold text-slate-900">Tracking Details</span>
+          <button onClick={() => window.print()} className="flex items-center gap-1.5 text-sm text-slate-500 hover:text-teal-700 transition-colors">
             <Printer className="h-4 w-4" />
-            Print
+            <span className="hidden sm:inline">Print</span>
           </button>
         </div>
       </div>
 
-      <div className="max-w-5xl mx-auto px-4 py-6 space-y-6">
-        {/* Tracking Header */}
-        <div className="bg-gradient-to-r from-blue-700 to-blue-900 rounded-xl p-6 text-white shadow-lg">
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-            <div>
-              <p className="text-blue-200 text-sm mb-1">Tracking Number</p>
-              <h2 className="text-2xl md:text-3xl font-bold font-mono tracking-wider">{pkg.trackingCode}</h2>
+      <div className="max-w-4xl mx-auto px-4 py-6 space-y-5">
+        {/* ===== RECEIPT HEADER ===== */}
+        <Card className="border-0 shadow-sm overflow-hidden">
+          {/* Brand Header */}
+          <div className="px-6 pt-6 pb-4">
+            <div className="flex items-start justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 bg-gradient-to-br from-teal-500 to-teal-700 rounded-xl flex items-center justify-center shadow-md">
+                  <Truck className="h-6 w-6 text-white" />
+                </div>
+                <div>
+                  <h1 className="text-xl font-bold text-slate-900 leading-tight">TitanRoute</h1>
+                  <p className="text-xs text-slate-400">Global Logistics Solutions</p>
+                </div>
+              </div>
+              <div className="text-right hidden sm:block">
+                <p className="text-[10px] text-slate-400 uppercase tracking-wider">Receipt Generated</p>
+                <p className="text-xs text-slate-600 font-medium">{new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })}</p>
+                <Badge variant="outline" className="mt-1.5 text-[10px] border-teal-200 text-teal-700 bg-teal-50">
+                  OFFICIAL RECEIPT
+                </Badge>
+              </div>
             </div>
-            <Badge className={`${config.color} text-white px-4 py-1.5 text-sm font-semibold`}>
-              {config.label}
-            </Badge>
+            <div className="mt-3 sm:hidden">
+              <Badge variant="outline" className="text-[10px] border-teal-200 text-teal-700 bg-teal-50">
+                OFFICIAL RECEIPT
+              </Badge>
+            </div>
           </div>
-        </div>
 
-        {/* Progress Bar */}
-        <Card className="border-slate-200 shadow-sm overflow-visible">
-          <CardContent className="p-6">
+          {/* Tracking Number Bar */}
+          <div className="mx-6 mb-5">
+            <div className="bg-gradient-to-r from-teal-500 to-teal-600 rounded-xl p-4 flex items-center justify-between shadow-sm">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-white/20 rounded-lg flex items-center justify-center backdrop-blur-sm">
+                  <Package className="h-5 w-5 text-white" />
+                </div>
+                <div>
+                  <p className="text-teal-100 text-[10px] uppercase tracking-wider font-medium">Tracking Number</p>
+                  <p className="text-white font-bold text-lg font-mono tracking-wider">{pkg.trackingCode}</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={copyTracking}
+                  className="p-2 bg-white/20 rounded-lg hover:bg-white/30 transition-colors"
+                  title="Copy tracking number"
+                >
+                  {copied ? <Check className="h-4 w-4 text-white" /> : <Copy className="h-4 w-4 text-white" />}
+                </button>
+                <div className="hidden sm:flex items-center gap-1.5 bg-white/20 rounded-full px-3 py-1.5 backdrop-blur-sm">
+                  <Shield className="h-3.5 w-3.5 text-white" />
+                  <span className="text-white text-xs font-medium">Verified</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Sender & Receiver */}
+          <div className="px-6 pb-6 space-y-4">
+            {/* Sender */}
+            <div className="bg-slate-50 rounded-xl p-4 border border-slate-100">
+              <div className="flex items-center gap-2 mb-3">
+                <div className="w-7 h-7 bg-teal-100 rounded-lg flex items-center justify-center">
+                  <Home className="h-3.5 w-3.5 text-teal-700" />
+                </div>
+                <span className="text-xs font-semibold text-teal-700 uppercase tracking-wider">Sender</span>
+              </div>
+              <div className="space-y-1.5">
+                <p className="font-semibold text-slate-900 text-sm">{pkg.senderName}</p>
+                <div className="flex items-center gap-2 text-slate-500">
+                  <MapPin className="h-3.5 w-3.5 shrink-0" />
+                  <span className="text-xs">{pkg.senderAddress || pkg.address}</span>
+                </div>
+                {pkg.senderPhone && (
+                  <div className="flex items-center gap-2 text-slate-500">
+                    <Phone className="h-3.5 w-3.5 shrink-0" />
+                    <span className="text-xs">{pkg.senderPhone}</span>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Receiver */}
+            <div className="bg-slate-50 rounded-xl p-4 border border-slate-100">
+              <div className="flex items-center gap-2 mb-3">
+                <div className="w-7 h-7 bg-blue-100 rounded-lg flex items-center justify-center">
+                  <MapPin className="h-3.5 w-3.5 text-blue-700" />
+                </div>
+                <span className="text-xs font-semibold text-blue-700 uppercase tracking-wider">Receiver</span>
+              </div>
+              <div className="space-y-1.5">
+                <p className="font-semibold text-slate-900 text-sm">{pkg.recipientName}</p>
+                <div className="flex items-center gap-2 text-slate-500">
+                  <Phone className="h-3.5 w-3.5 shrink-0" />
+                  <span className="text-xs">{pkg.phone}</span>
+                </div>
+                <div className="flex items-center gap-2 text-slate-500">
+                  <MapPin className="h-3.5 w-3.5 shrink-0" />
+                  <span className="text-xs">{pkg.address}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Barcode */}
+            <div className="border-t border-slate-100 pt-4">
+              <Barcode value={pkg.trackingCode} />
+            </div>
+
+            {/* Shipment Details Table */}
+            <div className="border border-slate-200 rounded-xl overflow-hidden">
+              <div className="bg-slate-50 px-4 py-2.5 border-b border-slate-200">
+                <p className="text-xs font-semibold text-slate-600 uppercase tracking-wider">Shipment Details</p>
+              </div>
+              <div className="divide-y divide-slate-100">
+                <div className="flex items-center justify-between px-4 py-3">
+                  <span className="text-xs text-slate-500">Order ID</span>
+                  <span className="text-sm font-medium text-slate-900 font-mono">{pkg.trackingCode.slice(-4)}</span>
+                </div>
+                <div className="flex items-center justify-between px-4 py-3">
+                  <span className="text-xs text-slate-500">Booking Mode</span>
+                  <Badge className="bg-rose-50 text-rose-700 border-0 text-[10px]">
+                    <Calendar className="h-3 w-3 mr-1" />
+                    To Day
+                  </Badge>
+                </div>
+                <div className="flex items-center justify-between px-4 py-3">
+                  <span className="text-xs text-slate-500">Shipment Cost</span>
+                  <span className="text-sm font-semibold text-slate-900">${(pkg.shippingCost || 0).toFixed(2)}</span>
+                </div>
+                <div className="flex items-center justify-between px-4 py-3">
+                  <span className="text-xs text-slate-500">Clearance Fee</span>
+                  <span className="text-sm font-medium text-slate-900">${(pkg.clearanceFee || 0).toFixed(2)}</span>
+                </div>
+                <div className="flex items-center justify-between px-4 py-3 bg-slate-50">
+                  <span className="text-xs font-semibold text-slate-700">Total Amount</span>
+                  <span className="text-base font-bold text-teal-700">${((pkg.shippingCost || 0) + (pkg.clearanceFee || 0)).toFixed(2)}</span>
+                </div>
+                <div className="flex items-center justify-between px-4 py-3">
+                  <span className="text-xs text-slate-500">Status</span>
+                  <Badge className={`${config.badgeBg} ${config.badgeText} border-0 text-xs font-medium`}>
+                    {config.label}
+                  </Badge>
+                </div>
+              </div>
+            </div>
+          </div>
+        </Card>
+
+        {/* ===== PROGRESS BAR ===== */}
+        <Card className="border-0 shadow-sm">
+          <CardContent className="p-5">
             <div className="relative">
-              {/* Line */}
-              <div className="absolute top-5 left-0 right-0 h-1 bg-slate-200 rounded-full" />
+              <div className="absolute top-4 left-0 right-0 h-0.5 bg-slate-200 rounded-full" />
               <div
-                className="absolute top-5 left-0 h-1 rounded-full transition-all duration-500"
+                className="absolute top-4 left-0 h-0.5 rounded-full transition-all duration-700"
                 style={{
-                  width: `${(currentStep / (STATUS_ORDER.length - 1)) * 100}%`,
-                  backgroundColor: pkg.status === "held_by_customs" ? "#f59e0b" : pkg.status === "delivered" ? "#059669" : "#2563eb",
+                  width: `${Math.max((currentStep / (STATUS_ORDER.length - 1)) * 100, 5)}%`,
+                  background: `linear-gradient(to right, ${TEAL[500]}, ${config.color})`,
                 }}
               />
-              {/* Steps */}
               <div className="relative flex justify-between">
                 {STATUS_ORDER.map((statusKey, i) => {
                   const isCompleted = i <= currentStep;
                   const isCurrent = i === currentStep;
                   const sConfig = STATUS_CONFIG[statusKey];
                   return (
-                    <div key={statusKey} className="flex flex-col items-center gap-2" style={{ width: "20%" }}>
+                    <div key={statusKey} className="flex flex-col items-center gap-1.5" style={{ width: "20%" }}>
                       <div
-                        className={`w-10 h-10 rounded-full flex items-center justify-center text-white transition-all ${
-                          isCurrent
-                            ? sConfig.color + " ring-4 ring-offset-2 ring-blue-200 scale-110"
-                            : isCompleted
-                            ? sConfig.color
-                            : "bg-slate-300"
-                        }`}
+                        className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold transition-all duration-300"
+                        style={{
+                          backgroundColor: isCompleted ? sConfig.color : "#e2e8f0",
+                          boxShadow: isCurrent ? `0 0 0 4px ${sConfig.color}30` : "none",
+                          transform: isCurrent ? "scale(1.15)" : "scale(1)",
+                        }}
                       >
-                        {isCompleted ? (
-                          <CheckCircle2 className="h-5 w-5" />
-                        ) : (
-                          <span className="text-sm font-bold">{i + 1}</span>
-                        )}
+                        {isCompleted ? <CheckCircle2 className="h-4 w-4" /> : i + 1}
                       </div>
-                      <span className={`text-[10px] md:text-xs font-medium text-center leading-tight ${isCompleted ? "text-slate-700" : "text-slate-400"}`}>
+                      <span className={`text-[9px] font-medium text-center leading-tight ${isCompleted ? "text-slate-700" : "text-slate-400"}`}>
                         {sConfig.label}
                       </span>
                     </div>
@@ -182,316 +367,175 @@ export default function TrackingResult() {
           </CardContent>
         </Card>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Left Column - Sender, Receiver, Details */}
-          <div className="lg:col-span-2 space-y-6">
-            {/* Sender & Receiver */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <Card className="border-slate-200">
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-sm font-semibold text-slate-500 flex items-center gap-2">
-                    <Home className="h-4 w-4" />
-                    Sender
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="pt-0">
-                  <p className="font-semibold text-slate-900">{pkg.senderName}</p>
-                  <p className="text-sm text-slate-500 mt-1">{pkg.senderAddress || pkg.address}</p>
-                  <p className="text-sm text-slate-500 flex items-center gap-1 mt-2">
-                    <Phone className="h-3.5 w-3.5" />
-                    {pkg.senderPhone || pkg.phone}
-                  </p>
-                </CardContent>
-              </Card>
-              <Card className="border-slate-200">
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-sm font-semibold text-slate-500 flex items-center gap-2">
-                    <MapPin className="h-4 w-4" />
-                    Receiver
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="pt-0">
-                  <p className="font-semibold text-slate-900">{pkg.recipientName}</p>
-                  <p className="text-sm text-slate-500 mt-1">{pkg.address}</p>
-                  <p className="text-sm text-slate-500 flex items-center gap-1 mt-2">
-                    <Phone className="h-3.5 w-3.5" />
-                    {pkg.phone}
-                  </p>
-                </CardContent>
-              </Card>
-            </div>
-
-            {/* Shipment Details Bar */}
-            <Card className="border-slate-200">
-              <CardContent className="p-4">
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  <div className="text-center">
-                    <p className="text-xs text-slate-500 mb-1">Weight</p>
-                    <p className="text-sm font-semibold text-slate-900">{pkg.weight} kg</p>
-                  </div>
-                  <div className="text-center">
-                    <p className="text-xs text-slate-500 mb-1">Booking Mode</p>
-                    <p className="text-sm font-semibold text-slate-900">Sea Freight</p>
-                  </div>
-                  <div className="text-center">
-                    <p className="text-xs text-slate-500 mb-1">Pickup Date</p>
-                    <p className="text-sm font-semibold text-slate-900">{new Date(pkg.createdAt).toLocaleDateString()}</p>
-                  </div>
-                  <div className="text-center">
-                    <p className="text-xs text-slate-500 mb-1">Expected Delivery</p>
-                    <p className="text-sm font-semibold text-slate-900">{new Date(Date.now() + 86400000 * 3).toLocaleDateString()}</p>
-                  </div>
+        {/* ===== SHIPMENT INFO BAR ===== */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          {[
+            { icon: Weight, label: "Weight", value: `${pkg.weight} kg` },
+            { icon: Globe, label: "Mode", value: "Sea Freight" },
+            { icon: Calendar, label: "Pickup", value: new Date(pkg.createdAt).toLocaleDateString() },
+            { icon: CreditCard, label: "Total", value: `$${((pkg.shippingCost || 0) + (pkg.clearanceFee || 0)).toFixed(2)}` },
+          ].map((item) => (
+            <div key={item.label} className="bg-white rounded-xl p-4 border border-slate-100 shadow-sm">
+              <div className="flex items-center gap-2 mb-1.5">
+                <div className="w-6 h-6 bg-teal-50 rounded-md flex items-center justify-center">
+                  <item.icon className="h-3 w-3 text-teal-600" />
                 </div>
-              </CardContent>
-            </Card>
+                <span className="text-[10px] text-slate-400 uppercase tracking-wider font-medium">{item.label}</span>
+              </div>
+              <p className="text-sm font-semibold text-slate-900">{item.value}</p>
+            </div>
+          ))}
+        </div>
 
-            {/* Live Map */}
-            {(pkg.senderLat || pkg.receiverLat) && (
-              <Card className="border-slate-200 overflow-hidden">
-                <CardHeader className="pb-3 bg-gradient-to-r from-blue-50 to-white">
-                  <CardTitle className="text-lg text-slate-900 flex items-center gap-2">
-                    <div className="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center">
-                      <MapPin className="h-4 w-4 text-blue-700" />
-                    </div>
-                    <span className="font-semibold">Live Route Tracking</span>
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="p-0">
-                  <div className="h-72">
-                    <Suspense fallback={
-                      <div className="h-full flex items-center justify-center bg-slate-50">
-                        <div className="text-center">
-                          <Loader2 className="h-8 w-8 animate-spin text-blue-600 mx-auto mb-2" />
-                          <p className="text-sm text-slate-400">Loading map...</p>
+        {/* ===== LIVE MAP ===== */}
+        {(pkg.senderLat || pkg.receiverLat) && (
+          <Card className="border-0 shadow-sm overflow-hidden">
+            <CardHeader className="pb-3 bg-slate-50 border-b border-slate-100">
+              <CardTitle className="text-sm text-slate-900 flex items-center gap-2">
+                <div className="w-7 h-7 bg-teal-100 rounded-lg flex items-center justify-center">
+                  <MapPin className="h-3.5 w-3.5 text-teal-700" />
+                </div>
+                <span className="font-semibold">Live Route Tracking</span>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-0">
+              <div className="h-64">
+                <Suspense fallback={
+                  <div className="h-full flex items-center justify-center bg-slate-50">
+                    <Loader2 className="h-8 w-8 animate-spin text-teal-600" />
+                  </div>
+                }>
+                  <LiveMap
+                    status={pkg.status}
+                    senderLat={pkg.senderLat}
+                    senderLng={pkg.senderLng}
+                    receiverLat={pkg.receiverLat}
+                    receiverLng={pkg.receiverLng}
+                  />
+                </Suspense>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+          {/* ===== SHIPMENT HISTORY ===== */}
+          <Card className="border-0 shadow-sm">
+            <CardHeader className="pb-3 bg-slate-50 border-b border-slate-100">
+              <CardTitle className="text-sm text-slate-900 flex items-center gap-2">
+                <div className="w-7 h-7 bg-teal-100 rounded-lg flex items-center justify-center">
+                  <Clock className="h-3.5 w-3.5 text-teal-700" />
+                </div>
+                <span className="font-semibold">Shipment History</span>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-4">
+              <div className="space-y-0">
+                {history.length === 0 ? (
+                  <p className="text-sm text-slate-400 text-center py-6">No history entries yet.</p>
+                ) : (
+                  history.map((h, i) => {
+                    const hConfig = STATUS_CONFIG[h.status] || STATUS_CONFIG.order_confirmed;
+                    const isLast = i === history.length - 1;
+                    return (
+                      <div key={h.id} className="flex gap-3 relative">
+                        {!isLast && <div className="absolute left-3.5 top-8 bottom-0 w-px bg-slate-200" />}
+                        <div className="w-7 h-7 rounded-full flex items-center justify-center shrink-0 text-white" style={{ backgroundColor: hConfig.color }}>
+                          {hConfig.icon}
+                        </div>
+                        <div className="flex-1 pb-5">
+                          <div className="flex items-center gap-2 mb-0.5">
+                            <span className="text-xs font-semibold text-slate-800">{hConfig.label}</span>
+                          </div>
+                          <span className="text-[10px] text-slate-400">{new Date(h.changedAt).toLocaleString()}</span>
+                          {h.reason && <p className="text-xs text-slate-500 mt-1">{h.reason}</p>}
                         </div>
                       </div>
-                    }>
-                      <LiveMap
-                        status={pkg.status}
-                        senderLat={pkg.senderLat}
-                        senderLng={pkg.senderLng}
-                        receiverLat={pkg.receiverLat}
-                        receiverLng={pkg.receiverLng}
-                      />
-                    </Suspense>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
+                    );
+                  })
+                )}
+              </div>
+            </CardContent>
+          </Card>
 
-            {/* Shipment History */}
-            <Card className="border-slate-200">
-              <CardHeader>
-                <CardTitle className="text-lg text-slate-900 flex items-center gap-2">
-                  <Clock className="h-5 w-5 text-blue-700" />
-                  Shipment History
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-0">
-                  {history.length === 0 ? (
-                    <p className="text-sm text-slate-500 text-center py-4">No history entries yet.</p>
-                  ) : (
-                    history.map((h, i) => {
-                      const hConfig = STATUS_CONFIG[h.status] || STATUS_CONFIG.order_confirmed;
-                      const isLast = i === history.length - 1;
-                      return (
-                        <div key={h.id} className="flex gap-4 relative">
-                          {!isLast && <div className="absolute left-5 top-10 bottom-0 w-px bg-slate-200" />}
-                          <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${hConfig.color} text-white`}>
-                            {hConfig.icon}
-                          </div>
-                          <div className="flex-1 pb-6">
-                            <div className="flex items-center gap-2 mb-1">
-                              <Badge className={`${hConfig.color} text-white text-xs`}>
-                                {hConfig.label}
-                              </Badge>
-                              <span className="text-xs text-slate-400">
-                                {new Date(h.changedAt).toLocaleString()}
-                              </span>
-                            </div>
-                            {h.reason && <p className="text-sm text-slate-600 mt-1">{h.reason}</p>}
-                            <p className="text-xs text-slate-400 mt-1">By {h.changedBy}</p>
-                          </div>
-                        </div>
-                      );
-                    })
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Media Gallery */}
-            {pkg.mediaUrls && pkg.mediaUrls.length > 0 && (
-              <Card className="border-slate-200 overflow-hidden">
-                <CardHeader className="pb-3 bg-gradient-to-r from-slate-50 to-white">
-                  <CardTitle className="text-lg text-slate-900 flex items-center gap-2">
-                    <div className="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center">
-                      <ImageIcon className="h-4 w-4 text-blue-700" />
-                    </div>
-                    <div>
-                      <span className="font-semibold">Media Gallery</span>
-                      <span className="ml-2 text-xs text-slate-400 font-normal">{pkg.mediaUrls.length} file{pkg.mediaUrls.length !== 1 ? "s" : ""}</span>
-                    </div>
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="pt-4">
-                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-                    {pkg.mediaUrls.map((url, i) => {
-                      const isVid = url.match(/\.(mp4|webm|mov)$/) || url.match(/^data:video/);
-                      return (
-                        <button
-                          key={i}
-                          onClick={() => setLightboxIndex(i)}
-                          className="relative aspect-square rounded-xl overflow-hidden border border-slate-200 group cursor-pointer text-left shadow-sm hover:shadow-md transition-all duration-300 hover:-translate-y-0.5"
-                        >
-                          {isVid ? (
-                            <>
-                              <video src={url} className="w-full h-full object-cover" preload="metadata" />
-                              <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/20 to-transparent" />
-                              <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                                <div className="w-12 h-12 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center border border-white/30">
-                                  <Play className="h-5 w-5 text-white ml-0.5" />
-                                </div>
-                              </div>
-                              <div className="absolute top-2 right-2 bg-black/50 backdrop-blur-sm text-white text-[10px] px-2 py-0.5 rounded-full font-medium">
-                                VIDEO
-                              </div>
-                              <div className="absolute bottom-2 left-2 right-2 flex items-center gap-1.5 text-white">
-                                <Play className="h-3 w-3" />
-                                <span className="text-xs font-medium">Click to play</span>
-                              </div>
-                            </>
-                          ) : (
-                            <>
-                              <img
-                                src={url}
-                                alt={`Package media ${i + 1}`}
-                                className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
-                              />
-                              <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors duration-300" />
-                              <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                                <div className="w-12 h-12 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center border border-white/30">
-                                  <ZoomIn className="h-5 w-5 text-white" />
-                                </div>
-                              </div>
-                              <div className="absolute top-2 right-2 bg-black/50 backdrop-blur-sm text-white text-[10px] px-2 py-0.5 rounded-full font-medium">
-                                PHOTO
-                              </div>
-                            </>
-                          )}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-          </div>
-
-          {/* Right Column - Receipt / Costs */}
-          <div className="space-y-6">
-            {/* Receipt Card */}
-            <Card className="border-slate-200 print:shadow-none">
-              <CardHeader className="pb-3 border-b border-slate-100">
-                <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 bg-blue-700 rounded flex items-center justify-center">
-                    <Truck className="h-4 w-4 text-white" />
+          {/* ===== MEDIA GALLERY ===== */}
+          {pkg.mediaUrls && pkg.mediaUrls.length > 0 ? (
+            <Card className="border-0 shadow-sm">
+              <CardHeader className="pb-3 bg-slate-50 border-b border-slate-100">
+                <CardTitle className="text-sm text-slate-900 flex items-center gap-2">
+                  <div className="w-7 h-7 bg-teal-100 rounded-lg flex items-center justify-center">
+                    <ImageIcon className="h-3.5 w-3.5 text-teal-700" />
                   </div>
                   <div>
-                    <CardTitle className="text-base text-slate-900">TitanRoute</CardTitle>
-                    <p className="text-xs text-slate-500">Shipping Receipt</p>
+                    <span className="font-semibold">Media</span>
+                    <span className="ml-2 text-[10px] text-slate-400 font-normal">{pkg.mediaUrls.length} file{pkg.mediaUrls.length !== 1 ? "s" : ""}</span>
                   </div>
-                </div>
+                </CardTitle>
               </CardHeader>
-              <CardContent className="pt-4 space-y-4">
-                {/* Barcode */}
-                <div className="bg-slate-100 rounded-lg p-3 text-center">
-                  <div className="h-12 bg-[url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMDAlIiBoZWlnaHQ9IjEwMCUiPjxwYXR0ZXJuIGlkPSJiYXIiIHdpZHRoPSI0IiBoZWlnaHQ9IjEwMCIgcGF0dGVyblVuaXRzPSJ1c2VyU3BhY2VPblVzZSI+PHJlY3Qgd2lkdGg9IjEiIGhlaWdodD0iMTAwIiBmaWxsPSIjMDAwIi8+PHJlY3QgeD0iMiIgd2lkdGg9IjIiIGhlaWdodD0iMTAwIiBmaWxsPSIjMDAwIi8+PC9wYXR0ZXJuPjxyZWN0IHdpZHRoPSIxMDAlIiBoZWlnaHQ9IjEwMCUiIGZpbGw9InVybCgjYmFyKSIvPjwvc3ZnPg==')] bg-repeat-x" />
-                  <p className="text-xs font-mono text-slate-600 mt-1">{pkg.trackingCode}</p>
+              <CardContent className="p-4">
+                <div className="grid grid-cols-3 gap-2">
+                  {pkg.mediaUrls.map((url, i) => {
+                    const isVid = url.match(/\.(mp4|webm|mov)$/) || url.match(/^data:video/);
+                    return (
+                      <button
+                        key={i}
+                        onClick={() => setLightboxIndex(i)}
+                        className="relative aspect-square rounded-lg overflow-hidden border border-slate-200 group cursor-pointer text-left hover:shadow-md transition-all duration-300 hover:-translate-y-0.5"
+                      >
+                        {isVid ? (
+                          <>
+                            <video src={url} className="w-full h-full object-cover" preload="metadata" />
+                            <div className="absolute inset-0 bg-black/30" />
+                            <div className="absolute inset-0 flex items-center justify-center">
+                              <div className="w-8 h-8 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center">
+                                <Play className="h-4 w-4 text-white ml-0.5" />
+                              </div>
+                            </div>
+                          </>
+                        ) : (
+                          <>
+                            <img src={url} alt="" className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
+                            <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors" />
+                            <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                              <div className="w-8 h-8 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center">
+                                <ZoomIn className="h-4 w-4 text-white" />
+                              </div>
+                            </div>
+                          </>
+                        )}
+                      </button>
+                    );
+                  })}
                 </div>
-
-                {/* Sender / Receiver mini */}
-                <div className="space-y-3">
-                  <div className="bg-slate-50 rounded-lg p-3">
-                    <p className="text-xs text-slate-500 mb-1">From</p>
-                    <p className="text-sm font-semibold text-slate-900">{pkg.senderName}</p>
-                    <p className="text-xs text-slate-500">{pkg.address}</p>
-                  </div>
-                  <div className="bg-slate-50 rounded-lg p-3">
-                    <p className="text-xs text-slate-500 mb-1">To</p>
-                    <p className="text-sm font-semibold text-slate-900">{pkg.recipientName}</p>
-                    <p className="text-xs text-slate-500">{pkg.address}</p>
-                  </div>
-                </div>
-
-                {/* Costs Table */}
-                <div>
-                  <p className="text-sm font-semibold text-slate-700 mb-2">Parcel Details & Costs</p>
-                  <div className="border border-slate-200 rounded-lg overflow-hidden">
-                    <table className="w-full text-sm">
-                      <thead className="bg-slate-50">
-                        <tr>
-                          <th className="text-left px-3 py-2 text-xs font-medium text-slate-500">Item</th>
-                          <th className="text-right px-3 py-2 text-xs font-medium text-slate-500">Cost</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        <tr className="border-t border-slate-100">
-                          <td className="px-3 py-2 text-slate-700">Shipping ({pkg.weight} kg)</td>
-                          <td className="px-3 py-2 text-right font-medium text-slate-900">${(pkg.shippingCost || 0).toFixed(2)}</td>
-                        </tr>
-                        <tr className="border-t border-slate-100">
-                          <td className="px-3 py-2 text-slate-700">Clearance Fee</td>
-                          <td className="px-3 py-2 text-right font-medium text-slate-900">${(pkg.clearanceFee || 0).toFixed(2)}</td>
-                        </tr>
-                        <tr className="border-t border-slate-100 bg-slate-50">
-                          <td className="px-3 py-2 font-semibold text-slate-900">Total</td>
-                          <td className="px-3 py-2 text-right font-bold text-blue-700">${((pkg.shippingCost || 0) + (pkg.clearanceFee || 0)).toFixed(2)}</td>
-                        </tr>
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-
-                {/* Print Button */}
-                <Button
-                  variant="outline"
-                  className="w-full border-blue-200 text-blue-700 hover:bg-blue-50"
-                  onClick={() => window.print()}
-                >
-                  <Printer className="h-4 w-4 mr-2" />
-                  Print Receipt
-                </Button>
               </CardContent>
             </Card>
+          ) : (
+            <Card className="border-0 shadow-sm">
+              <CardHeader className="pb-3 bg-slate-50 border-b border-slate-100">
+                <CardTitle className="text-sm text-slate-900 flex items-center gap-2">
+                  <div className="w-7 h-7 bg-slate-100 rounded-lg flex items-center justify-center">
+                    <ImageIcon className="h-3.5 w-3.5 text-slate-400" />
+                  </div>
+                  <span className="font-semibold text-slate-500">No Media</span>
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-4">
+                <p className="text-sm text-slate-400 text-center py-6">No photos or videos uploaded for this shipment.</p>
+              </CardContent>
+            </Card>
+          )}
+        </div>
 
-            {/* Description */}
-            {(pkg.description || pkg.notes) && (
-              <Card className="border-slate-200">
-                <CardContent className="p-4 space-y-3">
-                  {pkg.description && (
-                    <div>
-                      <p className="text-xs text-slate-500 mb-1">Description</p>
-                      <p className="text-sm text-slate-900">{pkg.description}</p>
-                    </div>
-                  )}
-                  {pkg.notes && (
-                    <div>
-                      <p className="text-xs text-slate-500 mb-1">Notes</p>
-                      <p className="text-sm text-slate-900">{pkg.notes}</p>
-                    </div>
-                  )}
-                  {pkg.customStatusReason && (
-                    <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
-                      <p className="text-xs text-amber-700 font-medium mb-1">Hold Reason</p>
-                      <p className="text-sm text-amber-800">{pkg.customStatusReason}</p>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            )}
-          </div>
+        {/* Print Receipt Button */}
+        <div className="flex justify-center pb-8">
+          <Button
+            variant="outline"
+            className="border-teal-200 text-teal-700 hover:bg-teal-50 px-8"
+            onClick={() => window.print()}
+          >
+            <Printer className="h-4 w-4 mr-2" />
+            Print Receipt
+          </Button>
         </div>
       </div>
 
