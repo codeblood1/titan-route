@@ -8,7 +8,7 @@ import {
   MapPin,
   Shield,
   Clock,
-  Package,
+  Package as PackageIcon,
   ArrowRight,
   CheckCircle2,
   BarChart3,
@@ -115,7 +115,7 @@ export default function Services() {
             className="max-w-3xl"
           >
             <div className="inline-flex items-center gap-2 px-3 py-1 bg-blue-500/20 rounded-full text-blue-300 text-sm font-medium mb-6">
-              <Package className="h-4 w-4" />
+              <PackageIcon className="h-4 w-4" />
               Our Services
             </div>
             <h1 className="text-4xl md:text-6xl font-bold mb-6 leading-tight">

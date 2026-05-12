@@ -47,7 +47,7 @@ export default function Header() {
             </div>
             <div>
               <h1 className={`text-lg font-bold leading-tight transition-colors ${scrolled ? "text-slate-900" : "text-white"}`}>
-                TitanRoute
+                FastShip
               </h1>
               {!scrolled && (
                 <p className="text-[10px] text-white/70 leading-none">Global Logistics</p>

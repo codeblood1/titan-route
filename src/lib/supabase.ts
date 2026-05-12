@@ -1,13 +1,14 @@
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
 
-// Timeout wrapper for async operations
+// Timeout wrapper — always cleans up the timer to prevent leaks
 function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
-  return Promise.race([
-    promise,
-    new Promise<T>((_, reject) =>
-      setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms)
-    ),
-  ]);
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  const timeoutPromise = new Promise<T>((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms);
+  });
+  return Promise.race([promise, timeoutPromise]).finally(() => {
+    if (timer) clearTimeout(timer);
+  });
 }
 
 // Types
@@ -368,7 +369,7 @@ export async function checkSupabaseHealth(): Promise<{ ok: boolean; ms: number; 
   const start = Date.now();
   try {
     const { error } = await withTimeout(
-      supabase.from("packages").select("id", { count: "exact", head: true }),
+      supabase.from("packages").select("id", { count: "planned", head: true }),
       8000,
       "Health check"
     );
@@ -390,25 +391,53 @@ export async function checkSupabaseHealth(): Promise<{ ok: boolean; ms: number; 
   }
 }
 
+// Reset the Supabase client — call this if repeated queries fail
+export function resetSupabaseClient(): void {
+  (globalThis as any).__supabaseStale = true;
+  console.log("[supabase] Client marked for reset. Reload the page to reconnect with a fresh session.");
+}
+
 // ===== PACKAGE SERVICE =====
 export const packageService = {
   async getAll(): Promise<Package[]> {
     return this.list();
   },
 
-  async list(filters?: { search?: string; status?: string }): Promise<Package[]> {
+  async list(filters?: { search?: string; status?: string }, retryCount = 3): Promise<Package[]> {
     if (!USE_LOCAL && supabase) {
-      let query = supabase.from("packages").select("*").order("created_at", { ascending: false });
-      if (filters?.search) {
-        query = query.ilike("tracking_code", `%${filters.search}%`);
+      let lastError: any = null;
+      for (let attempt = 1; attempt <= retryCount; attempt++) {
+        try {
+          let query = supabase.from("packages").select("*").order("created_at", { ascending: false });
+          if (filters?.search) {
+            query = query.ilike("tracking_code", `%${filters.search}%`);
+          }
+          if (filters?.status) {
+            query = query.eq("status", filters.status);
+          }
+          const { data, error } = await withTimeout(query, 15000, `Package list (attempt ${attempt})`);
+          console.log("[packageService.list] Supabase response:", { attempt, rowCount: data?.length ?? 0, error: error?.message || null });
+          if (error) {
+            lastError = error;
+            if (attempt < retryCount) {
+              const delay = Math.min(1000 * Math.pow(2, attempt - 1), 5000);
+              console.warn(`[packageService.list] Attempt ${attempt} failed, retrying in ${delay}ms...`);
+              await new Promise(r => setTimeout(r, delay));
+              continue;
+            }
+            throw error;
+          }
+          return (data || []).map(mapFromSupabasePackage);
+        } catch (err: any) {
+          lastError = err;
+          if (attempt >= retryCount) break;
+        }
       }
-      if (filters?.status) {
-        query = query.eq("status", filters.status);
-      }
-      const { data, error } = await withTimeout(query, 15000, "Package list");
-      console.log("[packageService.list] Supabase response:", { rowCount: data?.length ?? 0, error: error?.message || null });
-      if (error) throw error;
-      return (data || []).map(mapFromSupabasePackage);
+      console.error("[packageService.list] All retries exhausted. Last error:", lastError?.message);
+      // Fallback to localStorage on final failure
+      const localPackages = getPackages();
+      console.warn("[packageService.list] Falling back to localStorage:", localPackages.length, "packages");
+      return localPackages;
     }
 
     let packages = getPackages();
@@ -464,34 +493,48 @@ export const packageService = {
     console.log("[packageService.create] pkg.mediaUrls count:", pkg.mediaUrls?.length ?? 0, "urls:", pkg.mediaUrls);
 
     if (!USE_LOCAL && supabase) {
-      const sbPayload = mapToSupabasePackage(pkg);
-      console.log("[packageService.create] Supabase payload media_urls:", sbPayload.media_urls);
-      const { data: insertedRows, error } = await withTimeout(
-        supabase.from("packages").insert(sbPayload).select(),
-        15000,
-        "Package create"
-      );
-      if (error) {
-        console.error("[packageService.create] Supabase insert error:", error.message, error.code, error.details);
-        throw new Error(`Database insert failed: ${error.message}`);
+      let lastError: any = null;
+      for (let attempt = 1; attempt <= 3; attempt++) {
+        try {
+          const sbPayload = mapToSupabasePackage(pkg);
+          console.log("[packageService.create] attempt", attempt, "payload media_urls:", sbPayload.media_urls);
+          const { data: insertedRows, error } = await withTimeout(
+            supabase.from("packages").insert(sbPayload).select(),
+            15000,
+            `Package create (attempt ${attempt})`
+          );
+          if (error) {
+            lastError = error;
+            console.error(`[packageService.create] attempt ${attempt} error:`, error.message, error.code);
+            if (attempt < 3) {
+              await new Promise(r => setTimeout(r, 1000 * attempt));
+              continue;
+            }
+            throw new Error(`Database insert failed: ${error.message}`);
+          }
+          if (!insertedRows || insertedRows.length === 0) {
+            console.warn("[packageService.create] Insert succeeded but no rows returned. RLS may be blocking SELECT after INSERT.");
+            return pkg;
+          }
+          console.log("[packageService.create] attempt", attempt, "SUCCESS — returned media_urls:", (insertedRows[0] as any)?.media_urls);
+          // Insert initial history entry
+          const historyEntry = {
+            id: generateId(),
+            package_id: pkg.id,
+            status: "order_confirmed",
+            reason: null,
+            changed_by: "Admin",
+            changed_at: now(),
+          };
+          await supabase.from("package_history").insert(historyEntry).then(() => {}, (e) => console.error("[create] history insert error:", e));
+          return mapFromSupabasePackage(insertedRows[0]);
+        } catch (err: any) {
+          lastError = err;
+          if (attempt >= 3) break;
+          await new Promise(r => setTimeout(r, 1000 * attempt));
+        }
       }
-      if (!insertedRows || insertedRows.length === 0) {
-        console.warn("[packageService.create] Insert succeeded but no rows returned. RLS may be blocking SELECT after INSERT.");
-        return pkg;
-      }
-      const returnedMediaUrls = (insertedRows[0] as any)?.media_urls;
-      console.log("[packageService.create] Returned media_urls from DB:", returnedMediaUrls);
-      // Insert initial history entry
-      const historyEntry = {
-        id: generateId(),
-        package_id: pkg.id,
-        status: "order_confirmed",
-        reason: null,
-        changed_by: "Admin",
-        changed_at: now(),
-      };
-      await supabase.from("package_history").insert(historyEntry).then(() => {}, (e) => console.error("[create] history insert error:", e));
-      return mapFromSupabasePackage(insertedRows[0]);
+      throw new Error(`Database insert failed after 3 attempts: ${lastError?.message}`);
     }
 
     const packages = getPackages();

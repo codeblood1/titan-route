@@ -3,7 +3,7 @@ import { useNavigate, useLocation } from "react-router";
 import { useAuth } from "@/hooks/useAuth";
 import { packageService, uploadPackageFiles, checkSupabaseHealth, type Package } from "@/lib/supabase";
 import {
-  LayoutDashboard, Package, Plus, Trophy, Settings, LogOut,
+  LayoutDashboard, Package as PackageIcon, Plus, Trophy, Settings, LogOut,
   Search, Edit, Trash2, Filter, ChevronLeft, ChevronRight,
   X, Truck, Loader2, AlertCircle, CheckCircle2,
   Upload, Video, MapPin, Camera, Shield,
@@ -83,7 +83,7 @@ function SafeSection({ children }: { children: ReactNode }) {
 // ============== SIDEBAR ==============
 const sidebarItems = [
   { icon: LayoutDashboard, label: "Dashboard", path: "/admin" },
-  { icon: Package, label: "Shipments", path: "/admin/shipments" },
+  { icon: PackageIcon, label: "Shipments", path: "/admin/shipments" },
   { icon: Plus, label: "New Package", path: "/admin/create" },
   { icon: Trophy, label: "Leaderboard", path: "/admin/leaderboard" },
   { icon: Settings, label: "Settings", path: "/admin/settings" },
@@ -125,7 +125,7 @@ function Sidebar() {
 // ============== BOTTOM NAV (Mobile) ==============
 const mobileNavItems = [
   { icon: LayoutDashboard, label: "Home", path: "/admin" },
-  { icon: Package, label: "Shipments", path: "/admin/shipments" },
+  { icon: PackageIcon, label: "Shipments", path: "/admin/shipments" },
   { icon: Plus, label: "Create", path: "/admin/create" },
   { icon: Trophy, label: "Carriers", path: "/admin/leaderboard" },
   { icon: Settings, label: "Settings", path: "/admin/settings" },
@@ -647,7 +647,7 @@ function ShipmentsPage() {
                             <TableCell className="text-right">
                               <div className="flex items-center justify-end gap-0.5">
                                 <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => { setFormError(""); setEditPkg(pkg); }}><Edit className="h-3.5 w-3.5" /></Button>
-                                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setStatusPkg(pkg)}><Package className="h-3.5 w-3.5" /></Button>
+                                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setStatusPkg(pkg)}><PackageIcon className="h-3.5 w-3.5" /></Button>
                                 <Button variant="ghost" size="icon" className="h-8 w-8 text-red-500 hover:text-red-700" onClick={() => setDeletePkg(pkg)}><Trash2 className="h-3.5 w-3.5" /></Button>
                               </div>
                             </TableCell>

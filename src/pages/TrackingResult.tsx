@@ -6,7 +6,7 @@ import MediaLightbox from "@/components/MediaLightbox";
 import LanguageSelector from "@/components/LanguageSelector";
 import { useLanguage } from "@/hooks/useLanguage";
 import {
-  ArrowLeft, Package, MapPin, Phone, Weight, Clock,
+  ArrowLeft, Package as PackageIcon, MapPin, Phone, Weight, Clock,
   CheckCircle2, Printer, Truck, ClipboardCheck, Box, AlertTriangle,
   Home, Image as ImageIcon, Video, Play, Loader2, ZoomIn,
   Shield, Globe, Calendar, CreditCard, Copy, Check,
@@ -18,12 +18,76 @@ import { Badge } from "@/components/ui/badge";
 const LiveMap = lazy(() => import("@/components/LiveMap"));
 
 const TEAL = {
-  50: "#f0fdfa",
-  100: "#ccfbf1",
-  500: "#14b8a6",
-  600: "#0d9488",
-  700: "#0f766e",
+  50: "#eff6ff",
+  100: "#dbeafe",
+  500: "#3b82f6",
+  600: "#2563eb",
+  700: "#1d4ed8",
 };
+
+const STATUS_CONFIG: Record<string, { label: string; color: string; badgeBg: string; badgeText: string; icon: React.ReactNode }> = {
+  order_confirmed: {
+    label: "Order Confirmed",
+    color: TEAL[600],
+    badgeBg: "bg-blue-50",
+    badgeText: "text-blue-700",
+    icon: <ClipboardCheck className="h-4 w-4" />,
+  },
+  picked_by_courier: {
+    label: "Picked by Courier",
+    color: "#3b82f6",
+    badgeBg: "bg-blue-50",
+    badgeText: "text-blue-700",
+    icon: <Box className="h-4 w-4" />,
+  },
+  on_the_way: {
+    label: "On the Way",
+    color: "#6366f1",
+    badgeBg: "bg-indigo-50",
+    badgeText: "text-indigo-700",
+    icon: <Truck className="h-4 w-4" />,
+  },
+  held_by_customs: {
+    label: "Custom Hold",
+    color: "#f59e0b",
+    badgeBg: "bg-amber-50",
+    badgeText: "text-amber-700",
+    icon: <AlertTriangle className="h-4 w-4" />,
+  },
+  delivered: {
+    label: "Delivered",
+    color: "#3b82f6",
+    badgeBg: "bg-emerald-50",
+    badgeText: "text-blue-700",
+    icon: <CheckCircle2 className="h-4 w-4" />,
+  },
+};
+
+const STATUS_ORDER = ["order_confirmed", "picked_by_courier", "on_the_way", "held_by_customs", "delivered"];
+
+function Barcode({ value }: { value: string }) {
+  const bars = value.split("").map((char, i) => {
+    const code = char.charCodeAt(0);
+    const width1 = ((code * 7) % 3) + 1;
+    const width2 = ((code * 13) % 2) + 1;
+    const gap = ((code * 3) % 2) + 1;
+    return (
+      <g key={i}>
+        <rect x={i * 12} y="0" width={width1} height="50" fill="#1e293b" />
+        <rect x={i * 12 + width1 + gap} y="0" width={width2} height="50" fill="#1e293b" />
+      </g>
+    );
+  });
+
+  return (
+    <div className="text-center py-4">
+      <svg viewBox="0 0 120 50" className="w-full max-w-[240px] h-auto mx-auto" preserveAspectRatio="none">
+        {bars}
+      </svg>
+      <p className="text-xs font-mono text-slate-500 mt-2 tracking-widest">{value}</p>
+    </div>
+  );
+}
 
 export default function TrackingResult() {
   const { code } = useParams<{ code: string }>();
@@ -37,12 +101,11 @@ export default function TrackingResult() {
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const [copied, setCopied] = useState(false);
 
-  // Dynamic status config that uses translations
   const STATUS_CONFIG: Record<string, { color: string; badgeBg: string; badgeText: string; icon: React.ReactNode }> = {
     order_confirmed: {
       color: TEAL[600],
-      badgeBg: "bg-teal-50",
-      badgeText: "text-teal-700",
+      badgeBg: "bg-blue-50",
+      badgeText: "text-blue-700",
       icon: <ClipboardCheck className="h-4 w-4" />,
     },
     picked_by_courier: {
@@ -64,14 +127,12 @@ export default function TrackingResult() {
       icon: <AlertTriangle className="h-4 w-4" />,
     },
     delivered: {
-      color: "#10b981",
+      color: "#3b82f6",
       badgeBg: "bg-emerald-50",
-      badgeText: "text-emerald-700",
+      badgeText: "text-blue-700",
       icon: <CheckCircle2 className="h-4 w-4" />,
     },
   };
-
-  const STATUS_ORDER = ["order_confirmed", "picked_by_courier", "on_the_way", "held_by_customs", "delivered"];
 
   useEffect(() => {
     let cancelled = false;
@@ -105,36 +166,11 @@ export default function TrackingResult() {
     }
   };
 
-  // Barcode SVG generator
-  function Barcode({ value }: { value: string }) {
-    const bars = value.split("").map((char, i) => {
-      const code = char.charCodeAt(0);
-      const width1 = ((code * 7) % 3) + 1;
-      const width2 = ((code * 13) % 2) + 1;
-      const gap = ((code * 3) % 2) + 1;
-      return (
-        <g key={i}>
-          <rect x={i * 12} y="0" width={width1} height="50" fill="#1e293b" />
-          <rect x={i * 12 + width1 + gap} y="0" width={width2} height="50" fill="#1e293b" />
-        </g>
-      );
-    });
-
-    return (
-      <div className="text-center py-4">
-        <svg viewBox="0 0 120 50" className="w-full max-w-[240px] h-auto mx-auto" preserveAspectRatio="none">
-          {bars}
-        </svg>
-        <p className="text-xs font-mono text-slate-500 mt-2 tracking-widest">{value}</p>
-      </div>
-    );
-  }
-
   if (loading) {
     return (
       <div className="min-h-screen bg-[#f8fafc] flex items-center justify-center">
         <div className="text-center">
-          <div className="w-12 h-12 border-4 border-teal-100 border-t-teal-600 rounded-full animate-spin mx-auto mb-4" />
+          <div className="w-12 h-12 border-4 border-blue-100 border-t-blue-600 rounded-full animate-spin mx-auto mb-4" />
           <p className="text-slate-500 text-sm">{t("loadingTracking")}</p>
         </div>
       </div>
@@ -146,10 +182,10 @@ export default function TrackingResult() {
       <div className="min-h-screen bg-[#f8fafc] flex items-center justify-center px-4">
         <Card className="max-w-md w-full border-0 shadow-lg">
           <CardContent className="p-8 text-center">
-            <Package className="h-12 w-12 text-slate-300 mx-auto mb-4" />
+            <PackageIcon className="h-12 w-12 text-slate-300 mx-auto mb-4" />
             <h2 className="text-xl font-bold text-slate-900 mb-2">{t("trackingNotFound")}</h2>
             <p className="text-sm text-slate-500 mb-4">{error || t("notFoundDesc")}</p>
-            <Button className="bg-teal-600 hover:bg-teal-700" onClick={() => navigate("/")}>{t("trackAnother")}</Button>
+            <Button className="bg-blue-600 hover:bg-blue-700" onClick={() => navigate("/")}>{t("trackAnother")}</Button>
           </CardContent>
         </Card>
       </div>
@@ -159,7 +195,6 @@ export default function TrackingResult() {
   const config = STATUS_CONFIG[pkg.status] || STATUS_CONFIG.order_confirmed;
   const currentStep = STATUS_ORDER.indexOf(pkg.status);
 
-  // Translated status labels
   const statusLabels: Record<string, string> = {
     order_confirmed: t("orderConfirmed"),
     picked_by_courier: t("pickedByCourier"),
@@ -168,21 +203,19 @@ export default function TrackingResult() {
     delivered: t("delivered"),
   };
 
-  const statusLabel = statusLabels[pkg.status] || t("orderConfirmed");
-
   return (
     <div className="min-h-screen bg-[#f8fafc]">
       {/* Top Navigation */}
       <div className="bg-white border-b border-slate-200 sticky top-0 z-50">
         <div className="max-w-4xl mx-auto px-4 py-3 flex items-center justify-between">
-          <button onClick={() => navigate("/")} className="flex items-center gap-2 text-slate-500 hover:text-teal-700 transition-colors">
+          <button onClick={() => navigate("/")} className="flex items-center gap-2 text-slate-500 hover:text-blue-700 transition-colors">
             <ArrowLeft className="h-4 w-4" />
             <span className="text-sm font-medium">{t("back")}</span>
           </button>
           <span className="text-sm font-semibold text-slate-900">{t("trackingDetails")}</span>
           <div className="flex items-center gap-1">
             <LanguageSelector currentLang={lang} onChange={setLang} />
-            <button onClick={() => window.print()} className="flex items-center gap-1.5 text-sm text-slate-500 hover:text-teal-700 transition-colors p-2 rounded-lg hover:bg-slate-100">
+            <button onClick={() => window.print()} className="flex items-center gap-1.5 text-sm text-slate-500 hover:text-blue-700 transition-colors p-2 rounded-lg hover:bg-slate-100">
               <Printer className="h-4 w-4" />
               <span className="hidden sm:inline">{t("print")}</span>
             </button>
@@ -197,24 +230,24 @@ export default function TrackingResult() {
           <div className="px-6 pt-6 pb-4">
             <div className="flex items-start justify-between">
               <div className="flex items-center gap-3">
-                <div className="w-12 h-12 bg-gradient-to-br from-teal-500 to-teal-700 rounded-xl flex items-center justify-center shadow-md">
+                <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-blue-700 rounded-xl flex items-center justify-center shadow-md">
                   <Truck className="h-6 w-6 text-white" />
                 </div>
                 <div>
-                  <h1 className="text-xl font-bold text-slate-900 leading-tight">TitanRoute</h1>
+                  <h1 className="text-xl font-bold text-slate-900 leading-tight">FastShip</h1>
                   <p className="text-xs text-slate-400">{t("globalLogistics")}</p>
                 </div>
               </div>
               <div className="text-right hidden sm:block">
                 <p className="text-[10px] text-slate-400 uppercase tracking-wider">{t("receiptGenerated")}</p>
                 <p className="text-xs text-slate-600 font-medium">{new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })}</p>
-                <Badge variant="outline" className="mt-1.5 text-[10px] border-teal-200 text-teal-700 bg-teal-50">
+                <Badge variant="outline" className="mt-1.5 text-[10px] border-teal-200 text-blue-700 bg-blue-50">
                   {t("officialReceipt")}
                 </Badge>
               </div>
             </div>
             <div className="mt-3 sm:hidden">
-              <Badge variant="outline" className="text-[10px] border-teal-200 text-teal-700 bg-teal-50">
+              <Badge variant="outline" className="text-[10px] border-teal-200 text-blue-700 bg-blue-50">
                 {t("officialReceipt")}
               </Badge>
             </div>
@@ -222,13 +255,13 @@ export default function TrackingResult() {
 
           {/* Tracking Number Bar */}
           <div className="mx-6 mb-5">
-            <div className="bg-gradient-to-r from-teal-500 to-teal-600 rounded-xl p-4 flex items-center justify-between shadow-sm">
+            <div className="bg-gradient-to-r from-blue-500 to-blue-600 rounded-xl p-4 flex items-center justify-between shadow-sm">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 bg-white/20 rounded-lg flex items-center justify-center backdrop-blur-sm">
-                  <Package className="h-5 w-5 text-white" />
+                  <PackageIcon className="h-5 w-5 text-white" />
                 </div>
                 <div>
-                  <p className="text-teal-100 text-[10px] uppercase tracking-wider font-medium">{t("trackingNumber")}</p>
+                  <p className="text-blue-100 text-[10px] uppercase tracking-wider font-medium">{t("trackingNumber")}</p>
                   <p className="text-white font-bold text-lg font-mono tracking-wider">{pkg.trackingCode}</p>
                 </div>
               </div>
@@ -253,10 +286,10 @@ export default function TrackingResult() {
             {/* Sender */}
             <div className="bg-slate-50 rounded-xl p-4 border border-slate-100">
               <div className="flex items-center gap-2 mb-3">
-                <div className="w-7 h-7 bg-teal-100 rounded-lg flex items-center justify-center">
-                  <Home className="h-3.5 w-3.5 text-teal-700" />
+                <div className="w-7 h-7 bg-blue-100 rounded-lg flex items-center justify-center">
+                  <Home className="h-3.5 w-3.5 text-blue-700" />
                 </div>
-                <span className="text-xs font-semibold text-teal-700 uppercase tracking-wider">{t("sender")}</span>
+                <span className="text-xs font-semibold text-blue-700 uppercase tracking-wider">{t("sender")}</span>
               </div>
               <div className="space-y-1.5">
                 <p className="font-semibold text-slate-900 text-sm">{pkg.senderName}</p>
@@ -326,12 +359,12 @@ export default function TrackingResult() {
                 </div>
                 <div className="flex items-center justify-between px-4 py-3 bg-slate-50">
                   <span className="text-xs font-semibold text-slate-700">{t("totalAmount")}</span>
-                  <span className="text-base font-bold text-teal-700">${((pkg.shippingCost || 0) + (pkg.clearanceFee || 0)).toFixed(2)}</span>
+                  <span className="text-base font-bold text-blue-700">${((pkg.shippingCost || 0) + (pkg.clearanceFee || 0)).toFixed(2)}</span>
                 </div>
                 <div className="flex items-center justify-between px-4 py-3">
                   <span className="text-xs text-slate-500">{t("status")}</span>
                   <Badge className={`${config.badgeBg} ${config.badgeText} border-0 text-xs font-medium`}>
-                    {statusLabel}
+                    {statusLabels[pkg.status] || t("orderConfirmed")}
                   </Badge>
                 </div>
               </div>
@@ -389,8 +422,8 @@ export default function TrackingResult() {
           ].map((item) => (
             <div key={item.label} className="bg-white rounded-xl p-4 border border-slate-100 shadow-sm">
               <div className="flex items-center gap-2 mb-1.5">
-                <div className="w-6 h-6 bg-teal-50 rounded-md flex items-center justify-center">
-                  <item.icon className="h-3 w-3 text-teal-600" />
+                <div className="w-6 h-6 bg-blue-50 rounded-md flex items-center justify-center">
+                  <item.icon className="h-3 w-3 text-blue-600" />
                 </div>
                 <span className="text-[10px] text-slate-400 uppercase tracking-wider font-medium">{item.label}</span>
               </div>
@@ -404,8 +437,8 @@ export default function TrackingResult() {
           <Card className="border-0 shadow-sm overflow-hidden">
             <CardHeader className="pb-3 bg-slate-50 border-b border-slate-100">
               <CardTitle className="text-sm text-slate-900 flex items-center gap-2">
-                <div className="w-7 h-7 bg-teal-100 rounded-lg flex items-center justify-center">
-                  <MapPin className="h-3.5 w-3.5 text-teal-700" />
+                <div className="w-7 h-7 bg-blue-100 rounded-lg flex items-center justify-center">
+                  <MapPin className="h-3.5 w-3.5 text-blue-700" />
                 </div>
                 <span className="font-semibold">{t("liveRouteTracking")}</span>
               </CardTitle>
@@ -414,7 +447,7 @@ export default function TrackingResult() {
               <div className="h-64">
                 <Suspense fallback={
                   <div className="h-full flex items-center justify-center bg-slate-50">
-                    <Loader2 className="h-8 w-8 animate-spin text-teal-600" />
+                    <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
                   </div>
                 }>
                   <LiveMap
@@ -435,8 +468,8 @@ export default function TrackingResult() {
           <Card className="border-0 shadow-sm">
             <CardHeader className="pb-3 bg-slate-50 border-b border-slate-100">
               <CardTitle className="text-sm text-slate-900 flex items-center gap-2">
-                <div className="w-7 h-7 bg-teal-100 rounded-lg flex items-center justify-center">
-                  <Clock className="h-3.5 w-3.5 text-teal-700" />
+                <div className="w-7 h-7 bg-blue-100 rounded-lg flex items-center justify-center">
+                  <Clock className="h-3.5 w-3.5 text-blue-700" />
                 </div>
                 <span className="font-semibold">{t("shipmentHistory")}</span>
               </CardTitle>
@@ -476,8 +509,8 @@ export default function TrackingResult() {
             <Card className="border-0 shadow-sm">
               <CardHeader className="pb-3 bg-slate-50 border-b border-slate-100">
                 <CardTitle className="text-sm text-slate-900 flex items-center gap-2">
-                  <div className="w-7 h-7 bg-teal-100 rounded-lg flex items-center justify-center">
-                    <ImageIcon className="h-3.5 w-3.5 text-teal-700" />
+                  <div className="w-7 h-7 bg-blue-100 rounded-lg flex items-center justify-center">
+                    <ImageIcon className="h-3.5 w-3.5 text-blue-700" />
                   </div>
                   <div>
                     <span className="font-semibold">{t("media")}</span>
@@ -545,7 +578,7 @@ export default function TrackingResult() {
         <div className="flex justify-center pb-8">
           <Button
             variant="outline"
-            className="border-teal-200 text-teal-700 hover:bg-teal-50 px-8"
+            className="border-teal-200 text-blue-700 hover:bg-blue-50 px-8"
             onClick={() => window.print()}
           >
             <Printer className="h-4 w-4 mr-2" />

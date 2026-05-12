@@ -105,19 +105,19 @@ export default function Track() {
     {
       name: "Jennifer Walsh",
       role: "Supply Chain Director, TechFlow Inc.",
-      text: "TitanRoute reduced our shipping costs by 30% while improving delivery times. Their analytics dashboard gives us visibility we never had before.",
+      text: "FastShip reduced our shipping costs by 30% while improving delivery times. Their analytics dashboard gives us visibility we never had before.",
       stars: 5,
     },
     {
       name: "Robert Kim",
       role: "Owner, Kim's Electronics",
-      text: "As a small business, I need reliability without the enterprise price tag. TitanRoute delivers exactly that. My customers love the real-time tracking.",
+      text: "As a small business, I need reliability without the enterprise price tag. FastShip delivers exactly that. My customers love the real-time tracking.",
       stars: 5,
     },
     {
       name: "Amara Osei",
       role: "Logistics Manager, Global Pharma",
-      text: "Temperature-controlled shipping for pharmaceuticals is critical. TitanRoute's cold chain solution has maintained 100% compliance for 18 months straight.",
+      text: "Temperature-controlled shipping for pharmaceuticals is critical. FastShip's cold chain solution has maintained 100% compliance for 18 months straight.",
       stars: 5,
     },
   ];
@@ -304,7 +304,7 @@ export default function Track() {
               { step: "01", title: t("bookOnline"), desc: t("bookOnlineDesc"), icon: "📝", color: "bg-blue-50 text-blue-700" },
               { step: "02", title: t("wePickUp"), desc: t("wePickUpDesc"), icon: "📦", color: "bg-sky-50 text-sky-700" },
               { step: "03", title: t("trackLive"), desc: t("trackLiveDesc"), icon: "📍", color: "bg-indigo-50 text-indigo-700" },
-              { step: "04", title: t("stepDelivered"), desc: t("stepDeliveredDesc"), icon: "✅", color: "bg-emerald-50 text-emerald-700" },
+              { step: "04", title: t("stepDelivered"), desc: t("stepDeliveredDesc"), icon: "✅", color: "bg-emerald-50 text-blue-700" },
             ].map((item, i) => (
               <motion.div
                 key={item.step}
@@ -351,7 +351,7 @@ export default function Track() {
             {[
               { icon: Truck, title: t("groundFreight"), desc: t("groundFreightDesc"), color: "from-blue-600 to-blue-700", emoji: "🚚" },
               { icon: Plane, title: t("airFreight"), desc: t("airFreightDesc"), color: "from-sky-600 to-sky-700", emoji: "✈️" },
-              { icon: Ship, title: t("oceanFreight"), desc: t("oceanFreightDesc"), color: "from-teal-600 to-teal-700", emoji: "🚢" },
+              { icon: Ship, title: t("oceanFreight"), desc: t("oceanFreightDesc"), color: "from-blue-600 to-blue-700", emoji: "🚢" },
               { icon: Warehouse, title: t("warehousing"), desc: t("warehousingDesc"), color: "from-amber-600 to-amber-700", emoji: "🏭" },
             ].map((service, i) => (
               <motion.div
